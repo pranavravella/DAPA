@@ -192,8 +192,6 @@ export default function Screen() {
         </TouchableOpacity>
       </View>
     </View>
-
-    
   );
 
   const searchValue = useHeaderSearchBar({ hideWhenScrolling: COMPONENTS.length === 0 });
