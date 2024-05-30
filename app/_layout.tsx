@@ -52,8 +52,7 @@ const SCREEN_OPTIONS = {
 
 const INDEX_OPTIONS = {
   headerLargeTitle: true,
-  title: 'NativeWindUI',
-  headerRight: () => <SettingsIcon />,
+  title: 'DAWG',
 } as const;
 
 function SettingsIcon() {
