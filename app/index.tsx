@@ -3,7 +3,8 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { FlashList } from '@shopify/flash-list';
 import * as StoreReview from 'expo-store-review';
 import { cssInterop } from 'nativewind';
-import React, { useState, createContext, useContext, useCallback, useMemo } from 'react';
+
+import React, { useState, createContext, useContext, useEffect, useCallback, useMemo } from 'react';
 import {
   Alert,
   Button as RNButton,
@@ -30,6 +31,32 @@ import { createMaterialTopTabNavigator } from '@react-navigation/material-top-ta
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 
+import { initializeApp } from 'firebase/app';
+import { v4 as uuidv4 } from 'uuid';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyD1bee7SxskYp7V_sZO1V6j2JJEdVgHhtI',
+  authDomain: 'dawgin-68516.firebaseapp.com',
+  databaseURL: 'https://dawgin-68516-default-rtdb.firebaseio.com',
+  projectId: 'dawgin-68516',
+  storageBucket: 'dawgin-68516.appspot.com',
+  messagingSenderId: '480370370595',
+  appId: '1:480370370595:web:27172d7b9a075157a46996',
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  Timestamp,
+  collection,
+  getDocs,
+} from 'firebase/firestore';
+import { NativeSegmentedControlIOSChangeEvent } from '@react-native-segmented-control/segmented-control';
+
 // Interop setup for NativeWindUI
 cssInterop(FlashList, {
   className: 'style',
@@ -39,103 +66,147 @@ cssInterop(FlashList, {
 // Contexts
 const ActiveTabContext = createContext({
   activeTab: 'DAWGIN',
-  setActiveTab: () => {}
+  setActiveTab: () => {},
 });
 
-const GroupsJoinedContext = createContext({
+const GroupsJoinedContext = createContext<{
+  groupsJoined: Event[];
+  addGroup: (group: Event) => void;
+  removeGroup: (group: Event) => void;
+  updateGroup: (updatedGroup: Event[]) => void;
+}>({
   groupsJoined: [],
-  addGroup: (group) => {},
-  removeGroup: (group) => {}
+  addGroup: () => {},
+  removeGroup: () => {},
+  updateGroup: () => {},
 });
 
 const EventDataContext = createContext({
-  events: [],
-  updateEvent: (updatedEvent) => {},
-  addEvent: (newEvent) => {}
+  events: [] as Event[],
+  updateEvent: (updatedEvent: Event) => {},
+  addEvent: (newEvent: Event) => {},
+  setBatchEvents: (newEvents: Event[]) => {},
 });
 
 const AuthContext = createContext({
-  signIn: () => {},
+  signIn: (sunetID: string, password: string) => Promise.resolve(false),
   signOut: () => {},
   isSignedIn: false,
 });
+
+type UserData = {
+  Bio: string;
+  Name: string;
+  advancedInterests: string[];
+  beginnerInterests: string[];
+  intermediateInterests: string[];
+  pronouns: string;
+  joinedEvents: string[];
+};
+
+const UserDataContext = createContext<{
+  userData: UserData | null;
+  sunetID: string;
+  updateUserData: (newUserData: UserData) => void;
+  updateSunetID: (newSunetID: string) => void;
+}>({
+  userData: null,
+  sunetID: '',
+  updateUserData: () => {},
+  updateSunetID: () => {},
+});
+
+type commentObject = {
+  username: string;
+  time: string;
+  text: string;
+};
+
+type Event = {
+  id: string;
+  comments: number;
+  details: string;
+  additionalInfo: string;
+  joined: number;
+  location: string;
+  skillLevel: string;
+  time: string;
+  title: string;
+  username: string;
+  commentArray: commentObject[];
+};
 
 const Stack = createStackNavigator();
 
 export const ActiveTabProvider = ({ children }) => {
   const [activeTab, setActiveTab] = useState('DAWGIN');
-  const [groupsJoined, setGroupsJoined] = useState([]);
-  const [events, setEvents] = useState([
-    {
-      id: '1',
-      avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-      username: 'User in Basketball',
-      time: '2 hrs ago',
-      title: 'Pickup Basketball 7PM at Farillaga',
-      details: 'Beginner skill level',
-      joined: 4,
-      comments: 3,
-      skillLevel: 'Beginner',
-      location: 'Farillaga',
-    },
-    {
-      id: '2',
-      avatar: 'https://randomuser.me/api/portraits/men/31.jpg',
-      username: 'User in Soccer',
-      time: '3 hrs ago',
-      title: 'Soccer Game at 6PM on Wilbur Field',
-      details: 'Intermediate skill level',
-      joined: 6,
-      comments: 2,
-      skillLevel: 'Intermediate',
-      location: 'Wilbur Field',
-    },
-    // More events...
-  ]);
+  const [groupsJoined, setGroupsJoined] = useState<Event[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [sunetID, setSunetID] = useState('');
 
-  const addGroup = (group) => {
+  const addGroup = (group: Event) => {
     setGroupsJoined((prevGroups) => [...prevGroups, group]);
   };
 
-  const removeGroup = (group) => {
-    setGroupsJoined((prevGroups) =>
-      prevGroups.filter((g) => g.id !== group.id)
-    );
+  const removeGroup = (group: Event) => {
+    setGroupsJoined((prevGroups) => prevGroups.filter((g) => g.id !== group.id));
   };
 
-  const updateEvent = (updatedEvent) => {
+  const updateEvent = (updatedEvent: Event) => {
     setEvents((prevEvents) =>
-      prevEvents.map((event) =>
-        event.id === updatedEvent.id ? updatedEvent : event
-      )
+      prevEvents.map((event) => (event.id === updatedEvent.id ? updatedEvent : event))
     );
     setGroupsJoined((prevGroups) =>
-      prevGroups.map((group) =>
-        group.id === updatedEvent.id ? updatedEvent : group
-      )
+      prevGroups.map((group) => (group.id === updatedEvent.id ? updatedEvent : group))
     );
   };
 
-  const addEvent = (newEvent) => {
+  const addEvent = (newEvent: Event) => {
     setEvents((prevEvents) => [newEvent, ...prevEvents]);
+  };
+
+  const setBatchEvents = (newEvents: Event[]) => {
+    setEvents(newEvents);
+  };
+
+  const updateUserData = (newUserData: UserData) => {
+    setUserData(newUserData);
+  };
+
+  const updateSunetID = (newSunetID: string) => {
+    setSunetID(newSunetID);
+  };
+  const updateGroup = (updatedGroup: Event[]) => {
+    setGroupsJoined(updatedGroup);
   };
 
   return (
     <ActiveTabContext.Provider value={{ activeTab, setActiveTab }}>
-      <GroupsJoinedContext.Provider value={{ groupsJoined, addGroup, removeGroup }}>
-        <EventDataContext.Provider value={{ events, updateEvent, addEvent }}>
-          {children}
-        </EventDataContext.Provider>
-      </GroupsJoinedContext.Provider>
+      <UserDataContext.Provider value={{ userData, sunetID, updateUserData, updateSunetID }}>
+        <GroupsJoinedContext.Provider value={{ groupsJoined, addGroup, removeGroup, updateGroup }}>
+          <EventDataContext.Provider value={{ events, updateEvent, addEvent, setBatchEvents }}>
+            {children}
+          </EventDataContext.Provider>
+        </GroupsJoinedContext.Provider>
+      </UserDataContext.Provider>
     </ActiveTabContext.Provider>
   );
 };
 
 const AuthProvider = ({ children }) => {
   const [isSignedIn, setIsSignedIn] = useState(false);
-
-  const signIn = () => {
-    setIsSignedIn(true);
+  const signIn = async (sunetID, password) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (sunetID && password) {
+          setIsSignedIn(true);
+          resolve(true);
+        } else {
+          resolve(false); // Resolve with false indicating failure
+        }
+      }, 1000); // Simulate a delay
+    });
   };
 
   const signOut = () => {
@@ -143,9 +214,7 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isSignedIn, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ isSignedIn, signIn, signOut }}>{children}</AuthContext.Provider>
   );
 };
 
@@ -154,6 +223,7 @@ const useActiveTab = () => useContext(ActiveTabContext);
 const useGroupsJoined = () => useContext(GroupsJoinedContext);
 const useEventData = () => useContext(EventDataContext);
 const useAuth = () => useContext(AuthContext);
+const useUserData = () => useContext(UserDataContext);
 
 // Tab Bar
 const TabBar = () => {
@@ -163,18 +233,32 @@ const TabBar = () => {
     <View style={styles.tabContainer}>
       <TouchableOpacity
         style={[styles.tab, activeTab === 'DAWGIN' ? styles.activeTab : null]}
-        onPress={() => setActiveTab('DAWGIN')}
-      >
+        onPress={() => setActiveTab('DAWGIN')}>
         <Text style={styles.tabText}>DAWGIN'</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.tab, activeTab === 'NEW' ? styles.activeTab : null]}
-        onPress={() => setActiveTab('NEW')}
-      >
+        onPress={() => setActiveTab('NEW')}>
         <Text style={styles.tabText}>NEW</Text>
       </TouchableOpacity>
     </View>
   );
+};
+
+const isEventJoined = (userData: UserData, eventId: string): boolean => {
+  if (!userData || !userData.joinedEvents) return false;
+  return userData.joinedEvents.includes(eventId);
+};
+const updateEventInDatabase = async (newEvent: Event) => {
+  try {
+    const db = getFirestore(app);
+    const eventRef = doc(db, 'Events', newEvent.id);
+    const { id, ...eventData } = newEvent;
+    await setDoc(eventRef, eventData);
+    console.log('Event updated successfully');
+  } catch (error) {
+    console.error('Error updating event: ', error);
+  }
 };
 
 // Feed Component
@@ -182,54 +266,74 @@ const FeedComponent = ({ navigation }) => {
   const { activeTab } = useActiveTab();
   const { events, updateEvent } = useEventData();
   const { addGroup, removeGroup } = useGroupsJoined();
-
-  const data = useMemo(
-    () => (activeTab === 'DAWGIN' ? events : events),
-    [activeTab, events]
-  );
+  const { userData, updateUserData, sunetID } = useUserData();
+  const data = useMemo(() => (activeTab === 'DAWGIN' ? events : events), [activeTab, events]);
 
   const handleJoinToggle = (item) => {
+    if (!userData) return;
+    const isJoined = isEventJoined(userData, item.id);
     const updatedEvent = {
       ...item,
-      joined: item.hasJoined ? item.joined - 1 : item.joined + 1,
-      hasJoined: !item.hasJoined,
+      joined: isJoined ? item.joined - 1 : item.joined + 1,
     };
     updateEvent(updatedEvent);
-    if (item.hasJoined) {
+    updateEventInDatabase(updatedEvent);
+    const updatedUserData = {
+      ...userData,
+      joinedEvents: isJoined
+        ? userData.joinedEvents.filter((eventId) => eventId !== item.id)
+        : [...userData.joinedEvents, item.id],
+    };
+    updateUserData(updatedUserData);
+    databaseUserUpdate(updatedUserData, sunetID);
+    if (isJoined) {
       removeGroup(updatedEvent);
     } else {
       addGroup(updatedEvent);
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.itemContainer}>
-      <TouchableOpacity onPress={() => navigation.navigate('Post', { item })}>
-        <View style={styles.content}>
-          <Image source={{ uri: item.avatar }} style={styles.avatar} />
-          <View>
-            <Text style={styles.username}>
-              {item.username} - {item.time}
-            </Text>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.details}>{item.details}</Text>
-            <View style={styles.stats}>
-              <Text>{item.joined} Players Joined</Text>
-              <Text>{item.comments} Comments</Text>
+  const renderItem = ({ item }) => {
+    const formattedTime = new Date(parseInt(item.time)).toLocaleString();
+    return (
+      <View style={styles.itemContainer}>
+        <TouchableOpacity onPress={() => navigation.navigate('Post', { item })}>
+          <View style={styles.content}>
+            <View>
+              <Text style={styles.username}>
+                {item.username} - {formattedTime}
+              </Text>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.details}>Skill Level: {item.skillLevel}</Text>
+              <Text style={styles.details}>{item.details}</Text>
+              <Text style={styles.details}>Location: {item.location}</Text>
+              <Text style={styles.details}>Additional Info: {item.additionalInfo}</Text>
+              <View style={styles.stats}>
+                <Text>{item.comments} Comments</Text>
+              </View>
+              <View style={styles.stats}>
+                <Text>{item.joined} Players Joined </Text>
+              </View>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={item.hasJoined ? styles.joinedButton : styles.joinButton}
-        onPress={() => handleJoinToggle(item)}
-      >
-        <Text style={item.hasJoined ? styles.joinedButtonText : styles.joinedButtonText}>
-          {item.hasJoined ? 'Joined' : 'Join'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={
+            userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
+          }
+          onPress={() => handleJoinToggle(item)}>
+          <Text
+            style={
+              userData && isEventJoined(userData, item.id)
+                ? styles.joinedButtonText
+                : styles.joinedButtonText
+            }>
+            {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <FlatList
@@ -254,8 +358,7 @@ const MyTabs = ({ navigation }) => {
         tabBarStyle: { backgroundColor: 'white' },
         tabBarIndicatorStyle: { backgroundColor: 'orange' },
         headerShown: false, // Hide the header in the top tab navigator
-      }}
-    >
+      }}>
       <Tab.Screen name="DAWGIN'" component={FeedComponent} />
       <Tab.Screen name="NEW" component={FeedComponent} />
     </Tab.Navigator>
@@ -265,80 +368,101 @@ const MyTabs = ({ navigation }) => {
 // PostScreen Component
 const PostScreen = ({ route }) => {
   const { item } = route.params;
-  const [comments, setComments] = useState([
-    { id: '1', username: 'User 2', time: '2 hrs ago', text: 'Looking forward to it!' },
-    { id: '2', username: 'User 3', time: '1 hr ago', text: 'Hope we have a great game!' },
-  ]);
   const [newComment, setNewComment] = useState('');
   const { addGroup, removeGroup } = useGroupsJoined();
   const { updateEvent, events } = useEventData();
-
+  const { userData, updateUserData, sunetID } = useUserData();
   const currentEvent = events.find((event) => event.id === item.id) || item;
-  const [joined, setJoined] = useState(currentEvent.joined);
-  const [hasJoined, setHasJoined] = useState(currentEvent.hasJoined || false);
 
   const handleAddComment = () => {
     if (newComment.trim()) {
       const newCommentData = {
-        id: (comments.length + 1).toString(),
-        username: 'Current User',
-        time: 'Just now',
+        username: sunetID,
+        time: Date.now().toString(),
         text: newComment,
       };
-      setComments([...comments, newCommentData]);
+      currentEvent.commentArray.push(newCommentData);
+      currentEvent.comments += 1;
+      updateEvent(currentEvent);
+      updateEventInDatabase(currentEvent);
       setNewComment('');
     }
   };
 
-  const handleJoinToggle = () => {
-    const updatedEvent = { ...currentEvent, joined: hasJoined ? joined - 1 : joined + 1, hasJoined: !hasJoined };
+  const handleJoinToggle = (item) => {
+    if (!userData) return;
+    const isJoined = isEventJoined(userData, item.id);
+    const updatedEvent = {
+      ...item,
+      joined: isJoined ? item.joined - 1 : item.joined + 1,
+    };
     updateEvent(updatedEvent);
-    setJoined(updatedEvent.joined);
-    setHasJoined(updatedEvent.hasJoined);
-    if (hasJoined) {
+    updateEventInDatabase(updatedEvent);
+    const updatedUserData = {
+      ...userData,
+      joinedEvents: isJoined
+        ? userData.joinedEvents.filter((eventId) => eventId !== item.id)
+        : [...userData.joinedEvents, item.id],
+    };
+    updateUserData(updatedUserData);
+    databaseUserUpdate(updatedUserData, sunetID);
+    if (isJoined) {
       removeGroup(updatedEvent);
     } else {
       addGroup(updatedEvent);
     }
   };
 
-  const renderComment = ({ item }) => (
-    <View style={styles.commentContainer}>
-      <Text style={styles.commentText}>
-        <Text style={{ fontWeight: 'bold' }}>{item.username}</Text> {item.time}
-      </Text>
-      <Text style={styles.commentText}>{item.text}</Text>
-    </View>
-  );
+  const renderComment = ({ item }) => {
+    const formattedTime = new Date(parseInt(item.time)).toLocaleString();
+    return (
+      <View style={styles.commentContainer}>
+        <Text style={styles.commentText}>
+          <Text style={{ fontWeight: 'bold' }}>{item.username}</Text> {formattedTime}
+        </Text>
+        <Text style={styles.commentText}>{item.text}</Text>
+      </View>
+    );
+  };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 20 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
         <View>
           <Text style={{ fontWeight: 'bold' }}>{item.username}</Text>
-          <Text>{item.time}</Text>
         </View>
       </View>
       <Text style={styles.postHeader}>{item.title}</Text>
       <Text style={styles.postDetail}>{item.details}</Text>
+      <Text style={styles.postDetail}>Skill Level: {item.skillLevel}</Text>
+      <Text style={styles.postDetail}>{item.details}</Text>
+      <Text style={styles.postDetail}>Location: {item.location}</Text>
+      <Text style={styles.postDetail}>Additional Info: {item.additionalInfo}</Text>
       <View style={styles.stats}>
-        <Text>{joined} Players Joined</Text>
-        <Text>{comments.length} Comments</Text>
+        <Text>{item.joined} Players Joined</Text>
+        <Text>{item.comments} Comments</Text>
       </View>
       <TouchableOpacity
-        style={hasJoined ? styles.joinedButton : styles.joinButton}
-        onPress={handleJoinToggle}
-      >
-        <Text style={hasJoined ? styles.joinedButtonText : styles.joinedButtonText}>
-          {hasJoined ? 'Joined' : 'Join'}
+        style={
+          userData && isEventJoined(userData, currentEvent.id)
+            ? styles.joinedButton
+            : styles.joinButton
+        }
+        onPress={() => handleJoinToggle(currentEvent)}>
+        <Text
+          style={
+            userData && isEventJoined(userData, currentEvent.id)
+              ? styles.joinedButtonText
+              : styles.joinedButtonText
+          }>
+          {userData && isEventJoined(userData, currentEvent.id) ? 'Joined' : 'Join'}
         </Text>
       </TouchableOpacity>
       <Text style={styles.commentsHeader}>Comments:</Text>
       <FlatList
-        data={comments}
+        data={item.commentArray}
         renderItem={renderComment}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(comment) => comment.id}
         contentContainerStyle={{ flexGrow: 1 }}
       />
       <View style={styles.addCommentContainer}>
@@ -360,24 +484,26 @@ const PostScreen = ({ route }) => {
 const GroupsJoined = ({ navigation }) => {
   const { groupsJoined } = useGroupsJoined();
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity onPress={() => navigation.navigate('ChatRoom', { item })}>
-      <View style={styles.itemContainer}>
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-        <View style={styles.content}>
-          <Text style={styles.username}>
-            {item.username} - {item.time}
-          </Text>
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.details}>{item.details}</Text>
-          <View style={styles.stats}>
-            <Text>{item.joined} Players Joined</Text>
-            <Text>{item.comments} Comments</Text>
+  const renderItem = ({ item }) => {
+    const formattedTime = new Date(parseInt(item.time)).toLocaleString();
+    return (
+      <TouchableOpacity onPress={() => navigation.navigate('ChatRoom', { item })}>
+        <View style={styles.itemContainer}>
+          <View style={styles.content}>
+            <Text style={styles.username}>
+              {item.username} - {formattedTime}
+            </Text>
+            <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.details}>{item.details}</Text>
+            <View style={styles.stats}>
+              <Text>{item.joined} Players Joined </Text>
+              <Text>{item.comments} Comments</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <FlatList
@@ -394,7 +520,12 @@ const GroupsJoined = ({ navigation }) => {
 const ChatRoom = ({ route }) => {
   const { item } = route.params;
   const [messages, setMessages] = useState([
-    { id: '1', text: 'Hello! Welcome to the chat.', sender: 'user', timestamp: 'Nov 30, 2023, 9:41 AM' },
+    {
+      id: '1',
+      text: 'Hello! Welcome to the chat.',
+      sender: 'user',
+      timestamp: 'Nov 30, 2023, 9:41 AM',
+    },
     { id: '2', text: 'Hi there!', sender: 'admin', timestamp: 'Nov 30, 2023, 9:42 AM' },
   ]);
   const [newMessage, setNewMessage] = useState('');
@@ -417,20 +548,11 @@ const ChatRoom = ({ route }) => {
       style={[
         styles.chatBubble,
         item.sender === 'user' ? styles.chatBubbleRight : styles.chatBubbleLeft,
-      ]}
-    >
-      <Text
-        style={
-          item.sender === 'user'
-            ? styles.chatBubbleTextRight
-            : styles.chatBubbleTextLeft
-        }
-      >
+      ]}>
+      <Text style={item.sender === 'user' ? styles.chatBubbleTextRight : styles.chatBubbleTextLeft}>
         {item.text}
       </Text>
-      <Text style={{ fontSize: 10, color: 'gray', marginTop: 5 }}>
-        {item.timestamp}
-      </Text>
+      <Text style={{ fontSize: 10, color: 'gray', marginTop: 5 }}>{item.timestamp}</Text>
     </View>
   );
 
@@ -465,25 +587,27 @@ const NewPostScreen = ({ navigation }) => {
   const [location, setLocation] = useState('');
   const [skillLevel, setSkillLevel] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
+  const { sunetID } = useUserData();
 
   const { addEvent } = useEventData();
 
   const handleSubmit = () => {
+    console.log(sunetID);
     const newEvent = {
-      id: Date.now().toString(),
-      avatar: 'https://randomuser.me/api/portraits/men/31.jpg',
-      username: `User in ${sport}`,
-      time: 'Just now',
+      id: uuidv4(),
+      username: sunetID,
+      time: Date.now().toString(),
       title,
-      details: `${sport} game at ${time} on ${location}\nSkill Level: ${skillLevel}\n${additionalInfo}`,
+      details: `${sport} at ${time}`,
       joined: 0,
       comments: 0,
       skillLevel,
       location,
       additionalInfo,
-      hasJoined: false,
+      commentArray: [],
     };
     addEvent(newEvent);
+    updateEventInDatabase(newEvent);
     navigation.navigate('Main');
   };
 
@@ -551,21 +675,98 @@ const NewPostScreen = ({ navigation }) => {
   );
 };
 
+const fetchUserData = async (userId: string): Promise<UserData | null> => {
+  const db = getFirestore(app);
+  if (!userId) return null;
+  const userRef = doc(db, 'Users', userId);
+  try {
+    const docSnap = await getDoc(userRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data() as UserData;
+      console.log('User data fetched:', data);
+      return data;
+    } else {
+      const newUser: UserData = {
+        Bio: '',
+        Name: '',
+        advancedInterests: [],
+        beginnerInterests: [],
+        intermediateInterests: [],
+        pronouns: '',
+        joinedEvents: [],
+      };
+      await setDoc(userRef, newUser);
+      console.log('New user created:', newUser);
+      return newUser;
+    }
+  } catch (error) {
+    console.log('Error getting document:', error);
+    return null;
+  }
+};
+
+const databaseUserUpdate = async (newUserData: UserData, sunetID: string) => {
+  const db = getFirestore(app);
+  if (!sunetID) return;
+  const userRef = doc(db, 'Users', sunetID);
+  try {
+    await setDoc(userRef, newUserData, { merge: true });
+  } catch (error) {
+    console.log('Error updating document:', error);
+  }
+};
+
+const fetchAllEvents = async (): Promise<Event[]> => {
+  const db = getFirestore(app);
+  const eventsCollection = collection(db, 'Events');
+  try {
+    const querySnapshot = await getDocs(eventsCollection);
+    const eventsList: Event[] = [];
+    querySnapshot.forEach((doc) => {
+      const { id, ...eventData } = doc.data() as Event;
+      eventsList.push({ id: doc.id, ...eventData });
+    });
+    return eventsList;
+  } catch (error) {
+    console.log('Error fetching events:', error);
+    return [];
+  }
+};
+
 // LoginScreen Component
 const LoginScreen = ({ navigation }) => {
   const { signIn } = useAuth();
   const [sunetID, setSunetID] = useState('');
   const [password, setPassword] = useState('');
-
-  const handleSignIn = () => {
+  const { updateUserData, updateSunetID } = useUserData();
+  const { setBatchEvents } = useEventData();
+  const { groupsJoined, updateGroup } = useGroupsJoined();
+  const handleSignIn = async () => {
     if (sunetID.trim() && password.trim()) {
-      signIn();
-      navigation.replace('Main');
+      const signInResult = await signIn(sunetID, password);
+      if (signInResult) {
+        const returnUser = await fetchUserData(sunetID);
+        if (returnUser) {
+          console.log(returnUser);
+          updateUserData(returnUser);
+          updateSunetID(sunetID);
+          const allEvents = await fetchAllEvents();
+          const joinedEventIds = returnUser.joinedEvents;
+          const joinedEvents = allEvents.filter((event) => joinedEventIds.includes(event.id));
+          updateGroup(joinedEvents);
+          setBatchEvents(allEvents);
+          navigation.navigate('Main');
+        } else {
+          console.log('failed to fetch user data');
+          Alert.alert('Error', 'Failed to fetch user data.');
+        }
+      } else {
+        Alert.alert('Error', 'Invalid SUNet ID or password.');
+      }
     } else {
       Alert.alert('Error', 'Please enter your SUNet ID and password.');
     }
   };
-
   return (
     <View style={[styles.flex1, styles.centeredContainer]}>
       <Text style={styles.loginTitle}>DAWG</Text>
@@ -592,6 +793,7 @@ const LoginScreen = ({ navigation }) => {
 // HomeScreen Component
 const HomeScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  console.log('Home');
   const insets = useSafeAreaInsets();
 
   const handleSearchChange = (text) => {
@@ -618,40 +820,55 @@ const HomeScreen = ({ navigation }) => {
 
 // ProfileScreen Component
 const ProfileScreen = ({ navigation }) => {
+  const { userData, sunetID, updateUserData } = useUserData();
+  console.log('profile');
+  console.log(userData);
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState('John Doe');
-  const [pronouns, setPronouns] = useState('he/him');
-  const [sunetID, setSunetID] = useState('johndoe@stanford.edu');
-  const [bio, setBio] = useState('Current sophomore looking to make new friends!');
-  const [beginnerInterests, setBeginnerInterests] = useState(['Soccer', 'Chess']);
-  const [intermediateInterests, setIntermediateInterests] = useState(['Frisbee']);
-  const [advancedInterests, setAdvancedInterests] = useState(['Basketball', 'Poker']);
+  const [name, setName] = useState('');
+  const [sunetIDState, setSunetIDState] = useState('');
+  const [pronouns, setPronouns] = useState('');
+  const [bio, setBio] = useState('');
+  const [beginnerInterests, setBeginnerInterests] = useState<string[]>([]);
+  const [intermediateInterests, setIntermediateInterests] = useState<string[]>([]);
+  const [advancedInterests, setAdvancedInterests] = useState<string[]>([]);
+
   const { signOut } = useAuth();
+  useEffect(() => {
+    if (userData) {
+      setName(userData.Name || '');
+      setPronouns(userData.pronouns || '');
+      setBio(userData.Bio || '');
+      setBeginnerInterests(userData.beginnerInterests || []);
+      setIntermediateInterests(userData.intermediateInterests || []);
+      setAdvancedInterests(userData.advancedInterests || []);
+      setSunetIDState(sunetID);
+    } else {
+      console.log('no user data');
+    }
+  }, [userData, sunetID]);
 
   const handleSave = () => {
+    const newUserData = {
+      Name: name,
+      pronouns: pronouns,
+      Bio: bio,
+      beginnerInterests: beginnerInterests,
+      intermediateInterests: intermediateInterests,
+      advancedInterests: advancedInterests,
+      joinedEvents: userData?.joinedEvents || [],
+    };
+    updateUserData(newUserData);
+    databaseUserUpdate(newUserData, sunetID);
     setIsEditing(false);
-    // Save the updated information
   };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 20 }}>
-      <TouchableOpacity>
-        <Image
-          source={{ uri: 'https://randomuser.me/api/portraits/women/32.jpg' }}
-          style={styles.profileImage}
-        />
-      </TouchableOpacity>
-      <TouchableOpacity>
-        <Text style={styles.editProfileImageText}>Edit profile image</Text>
-      </TouchableOpacity>
+      <TouchableOpacity></TouchableOpacity>
       <View style={styles.infoContainer}>
         <Text style={styles.infoLabel}>Name</Text>
         {isEditing ? (
-          <TextInput
-            style={styles.infoText}
-            value={name}
-            onChangeText={setName}
-          />
+          <TextInput style={styles.infoText} value={name} onChangeText={setName} />
         ) : (
           <Text style={styles.infoText}>{name}</Text>
         )}
@@ -659,41 +876,25 @@ const ProfileScreen = ({ navigation }) => {
       <View style={styles.infoContainer}>
         <Text style={styles.infoLabel}>Pronouns</Text>
         {isEditing ? (
-          <TextInput
-            style={styles.infoText}
-            value={pronouns}
-            onChangeText={setPronouns}
-          />
+          <TextInput style={styles.infoText} value={pronouns} onChangeText={setPronouns} />
         ) : (
           <Text style={styles.infoText}>{pronouns}</Text>
         )}
       </View>
       <View style={styles.infoContainer}>
         <Text style={styles.infoLabel}>SUNet ID</Text>
-        {isEditing ? (
-          <TextInput
-            style={styles.infoText}
-            value={sunetID}
-            onChangeText={setSunetID}
-          />
-        ) : (
-          <Text style={styles.infoText}>{sunetID}</Text>
-        )}
+        <Text style={styles.infoText}>{sunetIDState}</Text>
       </View>
       <View style={styles.infoContainer}>
         <Text style={styles.infoLabel}>Bio</Text>
         {isEditing ? (
-          <TextInput
-            style={styles.infoText}
-            value={bio}
-            onChangeText={setBio}
-          />
+          <TextInput style={styles.infoText} value={bio} onChangeText={setBio} />
         ) : (
           <Text style={styles.infoText}>{bio}</Text>
         )}
       </View>
       <View style={styles.interestsContainer}>
-        <Text style={styles.interestsTitle}>Interests & Skill Levels</Text>
+        <Text style={styles.interestsTitle}>Interests & Skill Levels (Comma seperated)</Text>
         <View style={styles.interestsRow}>
           <View style={styles.interestsColumn}>
             <Text style={styles.infoLabel}>Beginner</Text>
@@ -705,7 +906,9 @@ const ProfileScreen = ({ navigation }) => {
               />
             ) : (
               beginnerInterests.map((interest, index) => (
-                <Text key={index} style={styles.interestsText}>{interest}</Text>
+                <Text key={index} style={styles.interestsText}>
+                  {interest}
+                </Text>
               ))
             )}
           </View>
@@ -719,7 +922,9 @@ const ProfileScreen = ({ navigation }) => {
               />
             ) : (
               intermediateInterests.map((interest, index) => (
-                <Text key={index} style={styles.interestsText}>{interest}</Text>
+                <Text key={index} style={styles.interestsText}>
+                  {interest}
+                </Text>
               ))
             )}
           </View>
@@ -733,7 +938,9 @@ const ProfileScreen = ({ navigation }) => {
               />
             ) : (
               advancedInterests.map((interest, index) => (
-                <Text key={index} style={styles.interestsText}>{interest}</Text>
+                <Text key={index} style={styles.interestsText}>
+                  {interest}
+                </Text>
               ))
             )}
           </View>
@@ -741,31 +948,18 @@ const ProfileScreen = ({ navigation }) => {
       </View>
       <TouchableOpacity
         style={styles.editProfileButton}
-        onPress={() => (isEditing ? handleSave() : setIsEditing(true))}
-      >
-        <Text style={styles.editProfileButtonText}>
-          {isEditing ? 'Save' : 'Edit'}
-        </Text>
+        onPress={() => (isEditing ? handleSave() : setIsEditing(true))}>
+        <Text style={styles.editProfileButtonText}>{isEditing ? 'Save' : 'Edit'}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.signOutButton}
         onPress={() => {
           signOut();
           navigation.replace('Login');
-        }}
-      >
+        }}>
         <Text style={styles.signOutButtonText}>Sign Out</Text>
       </TouchableOpacity>
     </ScrollView>
-  );
-};
-
-// Profile Navigator
-const ProfileNavigator = () => {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-    </Stack.Navigator>
   );
 };
 
@@ -792,11 +986,10 @@ const MainTabs = () => {
         tabBarActiveTintColor: 'orange', // Active tab color
         tabBarInactiveTintColor: 'gray', // Inactive tab color
         headerShown: false, // Hide the default header
-      })}
-    >
+      })}>
       <BottomTabs.Screen name="Home" component={HomeScreen} />
       <BottomTabs.Screen name="Groups Joined" component={GroupsJoined} />
-      <BottomTabs.Screen name="Profile" component={ProfileNavigator} />
+      <BottomTabs.Screen name="Profile" component={ProfileScreen} />
     </BottomTabs.Navigator>
   );
 };
@@ -811,8 +1004,16 @@ export default function Screen() {
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
             <Stack.Screen name="Post" component={PostScreen} options={{ title: 'Post' }} />
-            <Stack.Screen name="NewPost" component={NewPostScreen} options={{ title: 'New Post' }} />
-            <Stack.Screen name="ChatRoom" component={ChatRoom} options={({ route }) => ({ title: route.params.item.title })} />
+            <Stack.Screen
+              name="NewPost"
+              component={NewPostScreen}
+              options={{ title: 'New Post' }}
+            />
+            <Stack.Screen
+              name="ChatRoom"
+              component={ChatRoom}
+              options={({ route }) => ({ title: route.params.item.title })}
+            />
           </Stack.Navigator>
         </NavigationContainer>
       </AuthProvider>
@@ -835,42 +1036,42 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: '#eee',
     alignItems: 'center',
-    justifyContent: 'space-between' // Add this line to move Join button to the right
+    justifyContent: 'space-between', // Add this line to move Join button to the right
   },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginRight: 10
+    marginRight: 10,
   },
   content: {
-    flex: 1
+    flex: 1,
   },
   username: {
-    fontWeight: 'bold'
+    fontWeight: 'bold',
   },
   title: {
     fontSize: 16,
-    marginTop: 2
+    marginTop: 2,
   },
   details: {
     fontSize: 14,
-    color: 'gray'
+    color: 'gray',
   },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4
+    marginTop: 4,
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 0, 
+    bottom: 0,
     backgroundColor: 'orange',
     borderRadius: 20,
     width: 56,
@@ -880,7 +1081,7 @@ const styles = StyleSheet.create({
     elevation: 8,
     zIndex: 1000,
     flexDirection: 'row',
-    paddingHorizontal: 20
+    paddingHorizontal: 20,
   },
   fabText: {
     color: '#FFA500',
@@ -894,7 +1095,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: '#000000',
     paddingTop: 10,
-    paddingBottom: 10
+    paddingBottom: 10,
   },
   tab: {
     paddingHorizontal: 20,
@@ -902,7 +1103,7 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 3,
-    borderBottomColor: 'orange'
+    borderBottomColor: 'orange',
   },
   tabText: {
     fontSize: 16,
@@ -915,7 +1116,7 @@ const styles = StyleSheet.create({
     right: 0,
   },
   flex1: {
-    flex: 1
+    flex: 1,
   },
   centeredContainer: {
     justifyContent: 'center',
