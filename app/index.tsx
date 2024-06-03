@@ -136,6 +136,21 @@ type Event = {
   commentArray: commentObject[];
 };
 
+type chatMessage = {
+  sender: string;
+  time: string;
+  text: string;
+};
+
+const chatMessagesMapContext = createContext<{
+  chatMessagesMap: { [key: string]: chatMessage[] };
+  addChatMessage: (chatMessage: chatMessage, eventId: string) => void;
+  setBatchChatMessages: (batchChatMessages: { [eventId: string]: chatMessage[] }) => void;
+}>({
+  chatMessagesMap: {},
+  addChatMessage: () => {},
+  setBatchChatMessages: () => {},
+});
 const Stack = createStackNavigator();
 
 export const ActiveTabProvider = ({ children }) => {
@@ -144,9 +159,10 @@ export const ActiveTabProvider = ({ children }) => {
   const [events, setEvents] = useState<Event[]>([]);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [sunetID, setSunetID] = useState('');
+  const [chatMessagesMap, setChatMessagesMap] = useState<{ [eventId: string]: chatMessage[] }>({});
 
   const addGroup = (group: Event) => {
-    setGroupsJoined((prevGroups) => [...prevGroups, group]);
+    setGroupsJoined((prevGroups) => [group, ...prevGroups]);
   };
 
   const removeGroup = (group: Event) => {
@@ -180,13 +196,29 @@ export const ActiveTabProvider = ({ children }) => {
   const updateGroup = (updatedGroup: Event[]) => {
     setGroupsJoined(updatedGroup);
   };
-
+  const setBatchChatMessages = (batchChatMessages: { [eventId: string]: chatMessage[] }) => {
+    setChatMessagesMap(batchChatMessages);
+  };
+  const addChatMessage = (chatMessage: chatMessage, eventId: string) => {
+    setChatMessagesMap((prevChatMessagesMap) => {
+      const updatedChatMessages = prevChatMessagesMap[eventId]
+        ? [...prevChatMessagesMap[eventId], chatMessage]
+        : [chatMessage];
+      return {
+        ...prevChatMessagesMap,
+        [eventId]: updatedChatMessages,
+      };
+    });
+  };
   return (
     <ActiveTabContext.Provider value={{ activeTab, setActiveTab }}>
       <UserDataContext.Provider value={{ userData, sunetID, updateUserData, updateSunetID }}>
         <GroupsJoinedContext.Provider value={{ groupsJoined, addGroup, removeGroup, updateGroup }}>
           <EventDataContext.Provider value={{ events, updateEvent, addEvent, setBatchEvents }}>
-            {children}
+            <chatMessagesMapContext.Provider
+              value={{ chatMessagesMap, addChatMessage, setBatchChatMessages }}>
+              {children}
+            </chatMessagesMapContext.Provider>
           </EventDataContext.Provider>
         </GroupsJoinedContext.Provider>
       </UserDataContext.Provider>
@@ -224,7 +256,7 @@ const useGroupsJoined = () => useContext(GroupsJoinedContext);
 const useEventData = () => useContext(EventDataContext);
 const useAuth = () => useContext(AuthContext);
 const useUserData = () => useContext(UserDataContext);
-
+const useChatMessages = () => useContext(chatMessagesMapContext);
 // Tab Bar
 const TabBar = () => {
   const { activeTab, setActiveTab } = useActiveTab();
@@ -373,6 +405,7 @@ const PostScreen = ({ route }) => {
   const { updateEvent, events } = useEventData();
   const { userData, updateUserData, sunetID } = useUserData();
   const currentEvent = events.find((event) => event.id === item.id) || item;
+  const data = useMemo(() => currentEvent.commentArray, [currentEvent.commentArray]);
 
   const handleAddComment = () => {
     if (newComment.trim()) {
@@ -460,9 +493,9 @@ const PostScreen = ({ route }) => {
       </TouchableOpacity>
       <Text style={styles.commentsHeader}>Comments:</Text>
       <FlatList
-        data={item.commentArray}
+        data={data}
         renderItem={renderComment}
-        keyExtractor={(comment) => comment.id}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={{ flexGrow: 1 }}
       />
       <View style={styles.addCommentContainer}>
@@ -516,45 +549,66 @@ const GroupsJoined = ({ navigation }) => {
   );
 };
 
-// ChatRoom Component
+const updateChatMessagesInDatabase = async (newMessage: chatMessage, eventId: string) => {
+  try {
+    const db = getFirestore(app);
+    const chatRef = doc(db, 'Chat', eventId);
+    const chatDoc = await getDoc(chatRef);
+
+    if (chatDoc.exists()) {
+      const chatData = chatDoc.data() as { messages: chatMessage[] };
+      const updatedMessages: chatMessage[] = chatData.messages
+        ? [...chatData.messages, newMessage]
+        : [newMessage];
+      await setDoc(chatRef, { messages: updatedMessages }, { merge: true });
+    } else {
+      await setDoc(chatRef, { messages: [newMessage] });
+    }
+
+    console.log('Chat messages updated successfully');
+  } catch (error) {
+    console.error('Error updating chat messages: ', error);
+  }
+};
+
 const ChatRoom = ({ route }) => {
   const { item } = route.params;
-  const [messages, setMessages] = useState([
-    {
-      id: '1',
-      text: 'Hello! Welcome to the chat.',
-      sender: 'user',
-      timestamp: 'Nov 30, 2023, 9:41 AM',
-    },
-    { id: '2', text: 'Hi there!', sender: 'admin', timestamp: 'Nov 30, 2023, 9:42 AM' },
-  ]);
+  const { chatMessagesMap, addChatMessage } = useContext(chatMessagesMapContext);
+  const { sunetID } = useUserData();
+  const messages = chatMessagesMap[item.id] || [];
+
   const [newMessage, setNewMessage] = useState('');
 
   const handleSend = () => {
     if (newMessage.trim()) {
       const newMessageData = {
-        id: Date.now().toString(),
         text: newMessage,
-        sender: 'user',
-        timestamp: new Date().toLocaleString(),
+        sender: sunetID,
+        time: Date.now().toString(),
       };
-      setMessages([...messages, newMessageData]);
+      addChatMessage(newMessageData, item.id);
+      updateChatMessagesInDatabase(newMessageData, item.id);
       setNewMessage('');
     }
   };
 
-  const renderMessage = ({ item }) => (
-    <View
-      style={[
-        styles.chatBubble,
-        item.sender === 'user' ? styles.chatBubbleRight : styles.chatBubbleLeft,
-      ]}>
-      <Text style={item.sender === 'user' ? styles.chatBubbleTextRight : styles.chatBubbleTextLeft}>
-        {item.text}
-      </Text>
-      <Text style={{ fontSize: 10, color: 'gray', marginTop: 5 }}>{item.timestamp}</Text>
-    </View>
-  );
+  const renderMessage = ({ item }) => {
+    const formattedTime = new Date(parseInt(item.time)).toLocaleString();
+    return (
+      <View
+        style={[
+          styles.chatBubble,
+          item.sender === sunetID ? styles.chatBubbleRight : styles.chatBubbleLeft,
+        ]}>
+        <Text
+          style={item.sender === sunetID ? styles.chatBubbleTextRight : styles.chatBubbleTextLeft}>
+          {item.text}
+        </Text>
+        <Text style={{ fontSize: 10, color: 'gray', marginTop: 5 }}>{formattedTime}</Text>
+        <Text style={{ fontSize: 10, color: 'gray', marginTop: 5 }}>{item.sender}</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -733,6 +787,25 @@ const fetchAllEvents = async (): Promise<Event[]> => {
   }
 };
 
+const fetchAllChats = async (): Promise<{ [key: string]: chatMessage[] }> => {
+  const db = getFirestore(app);
+  const chatsCollection = collection(db, 'Chat');
+  try {
+    const querySnapshot = await getDocs(chatsCollection);
+    const chatsMap: { [key: string]: chatMessage[] } = {};
+    querySnapshot.forEach((doc) => {
+      const chatData = doc.data();
+      if (chatData.messages) {
+        chatsMap[doc.id] = chatData.messages as chatMessage[];
+      }
+    });
+    return chatsMap;
+  } catch (error) {
+    console.log('Error fetching chats:', error);
+    return {};
+  }
+};
+
 // LoginScreen Component
 const LoginScreen = ({ navigation }) => {
   const { signIn } = useAuth();
@@ -741,6 +814,7 @@ const LoginScreen = ({ navigation }) => {
   const { updateUserData, updateSunetID } = useUserData();
   const { setBatchEvents } = useEventData();
   const { groupsJoined, updateGroup } = useGroupsJoined();
+  const { chatMessagesMap, setBatchChatMessages } = useChatMessages();
   const handleSignIn = async () => {
     if (sunetID.trim() && password.trim()) {
       const signInResult = await signIn(sunetID, password);
@@ -753,8 +827,10 @@ const LoginScreen = ({ navigation }) => {
           const allEvents = await fetchAllEvents();
           const joinedEventIds = returnUser.joinedEvents;
           const joinedEvents = allEvents.filter((event) => joinedEventIds.includes(event.id));
+          const allChats = await fetchAllChats();
           updateGroup(joinedEvents);
           setBatchEvents(allEvents);
+          setBatchChatMessages(allChats);
           navigation.navigate('Main');
         } else {
           console.log('failed to fetch user data');
