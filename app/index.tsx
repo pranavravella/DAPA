@@ -57,6 +57,8 @@ import {
 } from 'firebase/firestore';
 import { NativeSegmentedControlIOSChangeEvent } from '@react-native-segmented-control/segmented-control';
 
+import { Modal } from 'react-native';
+
 // Interop setup for NativeWindUI
 cssInterop(FlashList, {
   className: 'style',
@@ -102,6 +104,7 @@ type UserData = {
   intermediateInterests: string[];
   pronouns: string;
   joinedEvents: string[];
+  hasAcceptedRules?: boolean;
 };
 
 const UserDataContext = createContext<{
@@ -869,11 +872,37 @@ const LoginScreen = ({ navigation }) => {
 // HomeScreen Component
 const HomeScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Rules
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const { userData, updateUserData, sunetID } = useUserData();
+
   console.log('Home');
   const insets = useSafeAreaInsets();
 
+  // Rules
+  useEffect(() => {
+    // Show the modal if the user has not accepted the rules
+    if (userData && !userData.hasAcceptedRules) {
+      setIsModalVisible(true);
+    }
+  }, [userData]);
+
   const handleSearchChange = (text) => {
     setSearchQuery(text);
+  };
+
+  // Rules
+  const handleAcceptRules = () => {
+    if (userData) {
+      const updatedUserData = {
+        ...userData,
+        hasAcceptedRules: true,
+      };
+      updateUserData(updatedUserData);
+      databaseUserUpdate(updatedUserData, sunetID);
+      setIsModalVisible(false);
+    }
   };
 
   return (
@@ -890,6 +919,33 @@ const HomeScreen = ({ navigation }) => {
       <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('NewPost')}>
         <Icon name="plus" size={30} color="#FFF" />
       </TouchableOpacity>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => {
+          setIsModalVisible(!isModalVisible);
+        }}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalText}>Rules and Guidelines</Text>
+            <Text style={styles.rulesText}>
+              1. Be respectful to other members at all times. {'\n'}
+              2. No spamming, discrimination, or harassment.{'\n'}
+              3. Follow the event guidelines and instructions.{'\n'}
+              4. Engage positively and constructively.{'\n'}
+              5. Report any inappropriate behavior to moderators. 
+            </Text>
+            <TouchableOpacity
+              style={[styles.button, styles.buttonClose]}
+              onPress={handleAcceptRules}
+            >
+              <Text style={styles.textStyle}>Accept</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -907,6 +963,7 @@ const ProfileScreen = ({ navigation }) => {
   const [beginnerInterests, setBeginnerInterests] = useState<string[]>([]);
   const [intermediateInterests, setIntermediateInterests] = useState<string[]>([]);
   const [advancedInterests, setAdvancedInterests] = useState<string[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   const { signOut } = useAuth();
   useEffect(() => {
@@ -932,6 +989,7 @@ const ProfileScreen = ({ navigation }) => {
       intermediateInterests: intermediateInterests,
       advancedInterests: advancedInterests,
       joinedEvents: userData?.joinedEvents || [],
+      hasAcceptedRules: true
     };
     updateUserData(newUserData);
     databaseUserUpdate(newUserData, sunetID);
@@ -1028,6 +1086,12 @@ const ProfileScreen = ({ navigation }) => {
         <Text style={styles.editProfileButtonText}>{isEditing ? 'Save' : 'Edit'}</Text>
       </TouchableOpacity>
       <TouchableOpacity
+        style={styles.rulesButton}
+        onPress={() => setIsModalVisible(true)}
+      >
+        <Text style={styles.rulesButtonText}>Rules</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
         style={styles.signOutButton}
         onPress={() => {
           signOut();
@@ -1035,6 +1099,33 @@ const ProfileScreen = ({ navigation }) => {
         }}>
         <Text style={styles.signOutButtonText}>Sign Out</Text>
       </TouchableOpacity>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => {
+          setIsModalVisible(!isModalVisible);
+        }}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalText}>Rules and Guidelines</Text>
+            <Text style={styles.rulesText}>
+              1. Be respectful to other members at all times.{'\n'}
+              2. No spamming, discrimination, or harassment.{'\n'}
+              3. Follow the event guidelines and instructions.{'\n'}
+              4. Engage positively and constructively.{'\n'}
+              5. Report any inappropriate behavior to moderators.
+            </Text>
+            <TouchableOpacity
+              style={[styles.button, styles.buttonClose]}
+              onPress={() => setIsModalVisible(false)}
+            >
+              <Text style={styles.textStyle}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1363,6 +1454,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
+    textAlign: 'center',
   },
   interestsRow: {
     flexDirection: 'row',
@@ -1416,5 +1508,63 @@ const styles = StyleSheet.create({
   signOutButtonText: {
     color: 'white',
     fontWeight: 'bold',
+  }, // Rules
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  button: {
+    borderRadius: 20,
+    padding: 10,
+    elevation: 2,
+  },
+  buttonClose: {
+    backgroundColor: 'orange',
+  },
+  textStyle: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  rulesText: {
+    marginBottom: 20,
+    textAlign: 'left',
+  },
+  rulesButton: {
+    backgroundColor: 'orange',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignSelf: 'center',
+    marginTop: 20,
+  },
+  rulesButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
+
+

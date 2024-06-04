@@ -1,0 +1,20 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project /Users/adrianmendozaperez/Documents/GitHub/DAPA/ios/dapa.xcodeproj -configuration Debug -scheme dapa -destination id=AE8B35BC-576F-436F-9E3C-DC14534D819F
+
+User defaults from command line:
+    IDEPackageSupportUseBuiltinSCM = YES
+
+Prepare packages
+
+Computing target dependency graph and provisioning inputs
+
+Create build description
+Build description signature: 3fb231a24aaaa18234e27c61dec517f0
+Build description path: /Users/adrianmendozaperez/Library/Developer/Xcode/DerivedData/dapa-dlisshnrvulmtbauvcyavhcmekfd/Build/Intermediates.noindex/XCBuildData/3fb231a24aaaa18234e27c61dec517f0-desc.xcbuild
+
+note: Building targets in dependency order
+/Users/adrianmendozaperez/Documents/GitHub/DAPA/ios/Pods/Target Support Files/Pods-dapa/Pods-dapa.debug.xcconfig:1:1: error: unable to open configuration settings file
+/Users/adrianmendozaperez/Documents/GitHub/DAPA/ios/Pods/Target Support Files/Pods-dapa/Pods-dapa.debug.xcconfig:1:1: error: unable to open configuration settings file
+/Users/adrianmendozaperez/Documents/GitHub/DAPA/ios/Pods/Target Support Files/Pods-dapa/Pods-dapa.debug.xcconfig:1:1: error: unable to open configuration settings file
+/Users/adrianmendozaperez/Documents/GitHub/DAPA/ios/Pods/Target Support Files/Pods-dapa/Pods-dapa.debug.xcconfig:1:1: error: unable to open configuration settings file
+note: Run script build phase 'Bundle React Native code and images' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'dapa' from project 'dapa')
