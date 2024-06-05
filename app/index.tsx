@@ -30,6 +30,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { Picker } from '@react-native-picker/picker';
+
 
 import { initializeApp } from 'firebase/app';
 import { v4 as uuidv4 } from 'uuid';
@@ -62,6 +64,7 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { NativeSegmentedControlIOSChangeEvent } from '@react-native-segmented-control/segmented-control';
+const db = getFirestore(app);
 
 import { Modal } from 'react-native';
 import { getRootURL } from 'expo-router/build/link/linking';
@@ -269,6 +272,50 @@ const useAuth = () => useContext(AuthContext);
 const useUserData = () => useContext(UserDataContext);
 const useChatMessages = () => useContext(chatMessagesMapContext);
 
+const ReportModal = ({ isReportModalVisible, setIsReportModalVisible, handleReportSubmit }) => {
+  const { setBatchEvents } = useEventData(); // Add this line
+  const [reportReason, setReportReason] = useState('');
+  const [additionalInfo, setAdditionalInfo] = useState('');
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={isReportModalVisible}
+      onRequestClose={() => setIsReportModalVisible(false)}
+    >
+      <View style={styles.centeredView}>
+        <View style={styles.modalView}>
+          <Text style={styles.modalText}>Report Post</Text>
+          <Text style={styles.labelText}>Reason for report:</Text>
+          <Picker
+            selectedValue={reportReason}
+            onValueChange={(itemValue) => setReportReason(itemValue)}
+            style={styles.picker}
+          >
+            <Picker.Item label="Spam" value="Spam" />
+            <Picker.Item label="Inappropriate Content" value="Inappropriate Content" />
+            <Picker.Item label="Harassment" value="Harassment" />
+            <Picker.Item label="False Information" value="False Information" />
+            <Picker.Item label="Other" value="Other" />
+          </Picker>
+          <Text style={styles.labelText}>Additional information (optional):</Text>
+          <TextInput
+            style={styles.additionalInfoInput}
+            placeholder="Provide more details"
+            value={additionalInfo}
+            onChangeText={setAdditionalInfo}
+            multiline={true}
+          />
+          <TouchableOpacity style={[styles.button, styles.buttonClose]} onPress={handleReportSubmit}>
+            <Text style={styles.textStyle}>Submit Report</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export { AuthProvider, useAuth };
 // Tab Bar
 const TabBar = () => {
@@ -313,6 +360,8 @@ const FeedComponent = ({ navigation }) => {
   const { addGroup, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
   const data = useMemo(() => (activeTab === 'DAWGIN' ? events : events), [activeTab, events]);
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   const shuffleArray = (array) => {
     for (let i = array.length - 1; i > 0; i--) {
@@ -354,16 +403,34 @@ const FeedComponent = ({ navigation }) => {
     }
   };
 
+  const handleReportSubmit = () => {
+    console.log('Report submitted for:', selectedPost);
+    setIsReportModalVisible(false);
+  };
+
+  const openReportModal = (post) => {
+    setSelectedPost(post);
+    setIsReportModalVisible(true);
+  };
+
   const renderItem = ({ item }) => {
     const formattedTime = new Date(parseInt(item.time)).toLocaleString();
     return (
       <View style={styles.itemContainer}>
+        <View style={styles.header}>
+          <Text style={styles.username}>
+            {item.username} - {formattedTime}
+          </Text>
+          <TouchableOpacity
+            style={styles.feedReportButton}
+            onPress={() => openReportModal(item)}
+          > 
+            <Text style={styles.feedReportButtonText}>Report Post</Text>
+        </TouchableOpacity>
+        </View>
         <TouchableOpacity onPress={() => navigation.navigate('Post', { item })}>
           <View style={styles.content}>
             <View>
-              <Text style={styles.username}>
-                {item.username} - {formattedTime}
-              </Text>
               <Text style={styles.title}>{item.title}</Text>
               <Text style={styles.details}>Skill Level: {item.skillLevel}</Text>
               <Text style={styles.details}>{item.details}</Text>
@@ -378,32 +445,41 @@ const FeedComponent = ({ navigation }) => {
             </View>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={
-            userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
-          }
-          onPress={() => handleJoinToggle(item)}>
-          <Text
+        <View style={styles.footer}>
+          <TouchableOpacity
             style={
-              userData && isEventJoined(userData, item.id)
-                ? styles.joinedButtonText
-                : styles.joinedButtonText
-            }>
-            {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
-          </Text>
-        </TouchableOpacity>
+              userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
+            }
+            onPress={() => handleJoinToggle(item)}>
+            <Text
+              style={
+                userData && isEventJoined(userData, item.id)
+                  ? styles.joinedButtonText
+                  : styles.joinedButtonText
+              }>
+              {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
   return (
-    <FlatList
-      data={sortedData}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={{ flexGrow: 1 }} // Ensure the FlatList container takes up full height
-      style={{ flex: 1 }} // Make sure the FlatList itself expands to fill available space
-    />
+    <>
+      <FlatList
+        data={sortedData}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ flexGrow: 1 }} // Ensure the FlatList container takes up full height
+        style={{ flex: 1 }} // Make sure the FlatList itself expands to fill available space
+      />
+      <ReportModal
+        isReportModalVisible={isReportModalVisible}
+        setIsReportModalVisible={setIsReportModalVisible}
+        handleReportSubmit={handleReportSubmit}
+      />
+    </>
   );
 };
 
@@ -435,6 +511,9 @@ const PostScreen = ({ route }) => {
   const { userData, updateUserData, sunetID } = useUserData();
   const currentEvent = events.find((event) => event.id === item.id) || item;
   const data = useMemo(() => currentEvent.commentArray, [currentEvent.commentArray]);
+
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   const handleAddComment = () => {
     if (newComment.trim()) {
@@ -475,6 +554,16 @@ const PostScreen = ({ route }) => {
     }
   };
 
+  const handleReportSubmit = () => {
+    console.log('Report submitted for:', selectedPost);
+    setIsReportModalVisible(false);
+  };
+
+  const openReportModal = (post) => {
+    setSelectedPost(post);
+    setIsReportModalVisible(true);
+  };
+
   const renderComment = ({ item }) => {
     const formattedTime = new Date(parseInt(item.time)).toLocaleString();
     return (
@@ -483,6 +572,12 @@ const PostScreen = ({ route }) => {
           <Text style={{ fontWeight: 'bold' }}>{item.username}</Text> {formattedTime}
         </Text>
         <Text style={styles.commentText}>{item.text}</Text>
+        <TouchableOpacity
+          style={styles.reportButton}
+          onPress={() => openReportModal(item)}
+        >
+          <Text style={styles.reportButtonText}>Report Comment</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -520,6 +615,12 @@ const PostScreen = ({ route }) => {
           {userData && isEventJoined(userData, currentEvent.id) ? 'Joined' : 'Join'}
         </Text>
       </TouchableOpacity>
+      <TouchableOpacity
+          style={styles.reportButton}
+          onPress={() => openReportModal(item)}
+      > 
+        <Text style={styles.reportButtonText}>Report Post</Text>
+      </TouchableOpacity>
       <Text style={styles.commentsHeader}>Comments:</Text>
       <FlatList
         data={data}
@@ -538,6 +639,11 @@ const PostScreen = ({ route }) => {
           <Text style={styles.addCommentButtonText}>Post</Text>
         </TouchableOpacity>
       </View>
+      <ReportModal
+        isReportModalVisible={isReportModalVisible}
+        setIsReportModalVisible={setIsReportModalVisible}
+        handleReportSubmit={handleReportSubmit}
+      />
     </ScrollView>
   );
 };
@@ -575,6 +681,7 @@ const GroupsJoined = ({ navigation }) => {
       contentContainerStyle={{ flexGrow: 1 }}
       style={{ flex: 1 }}
     />
+    
   );
 };
 
@@ -605,8 +712,9 @@ const ChatRoom = ({ route }) => {
   const { chatMessagesMap, addChatMessage } = useContext(chatMessagesMapContext);
   const { sunetID } = useUserData();
   const messages = chatMessagesMap[item.id] || [];
-
   const [newMessage, setNewMessage] = useState('');
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   const handleSend = () => {
     if (newMessage.trim()) {
@@ -619,6 +727,16 @@ const ChatRoom = ({ route }) => {
       updateChatMessagesInDatabase(newMessageData, item.id);
       setNewMessage('');
     }
+  };
+
+  const handleReportSubmit = () => {
+    console.log('Report submitted for:', selectedPost);
+    setIsReportModalVisible(false);
+  };
+
+  const openReportModal = (post) => {
+    setSelectedPost(post);
+    setIsReportModalVisible(true);
   };
 
   const renderMessage = ({ item }) => {
@@ -641,6 +759,14 @@ const ChatRoom = ({ route }) => {
 
   return (
     <View style={{ flex: 1 }}>
+      <View style={styles.chatHeader}>
+        <TouchableOpacity
+            style={styles.reportChatButton}
+            onPress={() => openReportModal(item)}
+        > 
+          <Text style={styles.reportChatButtonText}>Report Chatroom</Text>
+        </TouchableOpacity>
+      </View>
       <FlatList
         data={messages}
         renderItem={renderMessage}
@@ -658,6 +784,11 @@ const ChatRoom = ({ route }) => {
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
+      <ReportModal
+        isReportModalVisible={isReportModalVisible}
+        setIsReportModalVisible={setIsReportModalVisible}
+        handleReportSubmit={handleReportSubmit}
+      />
     </View>
   );
 };
@@ -712,7 +843,7 @@ const NewPostScreen = ({ navigation }) => {
           style={styles.infoText}
           value={sport}
           onChangeText={setSport}
-          placeholder="Enter the sport"
+          placeholder="Enter the activity"
         />
       </View>
       <View style={styles.infoContainer}>
@@ -777,6 +908,7 @@ const fetchUserData = async (userId: string): Promise<UserData | null> => {
         intermediateInterests: [],
         pronouns: '',
         joinedEvents: [],
+        hasAcceptedRules: false
       };
       await setDoc(userRef, newUser);
       console.log('New user created:', newUser);
@@ -917,11 +1049,11 @@ const HomeScreen = ({ navigation }) => {
 
   // Rules
   useEffect(() => {
-    // Show the modal if the user has not accepted the rules
-    if (userData && !userData.hasAcceptedRules) {
+    if (userData && userData.hasAcceptedRules === false) {
       setIsModalVisible(true);
     }
   }, [userData]);
+
 
   const handleSearchChange = (text) => {
     setSearchQuery(text);
@@ -1239,12 +1371,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   itemContainer: {
-    flexDirection: 'row',
     padding: 10,
-    borderBottomWidth: 1,
-    borderColor: '#eee',
+    marginBottom: 10,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+    justifyContent: 'space-between', // Ensure space between elements
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'space-between', // Add this line to move Join button to the right
+  },
+  username: {
+    fontWeight: 'bold',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   avatar: {
     width: 50,
@@ -1254,6 +1402,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    marginVertical: 10, 
   },
   username: {
     fontWeight: 'bold',
@@ -1603,6 +1752,62 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   rulesButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  reportButton: {
+    backgroundColor: '#ff9999', // Softer red color
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-end',
+    marginVertical: 5,
+  },
+  reportButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  picker: {
+    width: '100%',
+    height: 35,
+    marginBottom: 20,
+  },
+  labelText: {
+    alignSelf: 'flex-start',
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  additionalInfoInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    padding: 10,
+    width: '100%',
+    marginBottom: 20,
+    textAlignVertical: 'top',
+  },
+  feedReportButton: {
+    backgroundColor: '#ff9999', // Softer red color
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  feedReportButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 10,
+  },
+  reportChatButton: {
+    backgroundColor: '#ff9999', // Softer red color
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  reportChatButtonText: {
     color: 'white',
     fontWeight: 'bold',
   },
