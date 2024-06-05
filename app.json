@@ -36,6 +36,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       }
+    },
+    "extra": {
+      "googleAuthClientId": "480370370595-3p8qlk9q5nin5m0ig83bttod25qkgkr2.apps.googleusercontent.com"
     }
   }
 }

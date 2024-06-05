@@ -34,6 +34,9 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { initializeApp } from 'firebase/app';
 import { v4 as uuidv4 } from 'uuid';
 
+// Google
+import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
+
 const firebaseConfig = {
   apiKey: 'AIzaSyD1bee7SxskYp7V_sZO1V6j2JJEdVgHhtI',
   authDomain: 'dawgin-68516.firebaseapp.com',
@@ -46,6 +49,9 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app)
+const provider = new GoogleAuthProvider();
+
 import {
   getFirestore,
   doc,
@@ -58,6 +64,7 @@ import {
 import { NativeSegmentedControlIOSChangeEvent } from '@react-native-segmented-control/segmented-control';
 
 import { Modal } from 'react-native';
+import { getRootURL } from 'expo-router/build/link/linking';
 
 // Interop setup for NativeWindUI
 cssInterop(FlashList, {
@@ -231,19 +238,20 @@ export const ActiveTabProvider = ({ children }) => {
 
 const AuthProvider = ({ children }) => {
   const [isSignedIn, setIsSignedIn] = useState(false);
-  const signIn = async (sunetID, password) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (sunetID && password) {
-          setIsSignedIn(true);
-          resolve(true);
-        } else {
-          resolve(false); // Resolve with false indicating failure
-        }
-      }, 1000); // Simulate a delay
-    });
-  };
 
+  const signIn = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      setIsSignedIn(true);
+      return true;
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      Alert.alert('Error', 'Failed to sign in with Google.');
+      return false;
+    }
+  };
+  
   const signOut = () => {
     setIsSignedIn(false);
   };
@@ -260,6 +268,8 @@ const useEventData = () => useContext(EventDataContext);
 const useAuth = () => useContext(AuthContext);
 const useUserData = () => useContext(UserDataContext);
 const useChatMessages = () => useContext(chatMessagesMapContext);
+
+export { AuthProvider, useAuth };
 // Tab Bar
 const TabBar = () => {
   const { activeTab, setActiveTab } = useActiveTab();
@@ -812,59 +822,68 @@ const fetchAllChats = async (): Promise<{ [key: string]: chatMessage[] }> => {
 // LoginScreen Component
 const LoginScreen = ({ navigation }) => {
   const { signIn } = useAuth();
-  const [sunetID, setSunetID] = useState('');
-  const [password, setPassword] = useState('');
+  const [value, setValue] = useState('');
   const { updateUserData, updateSunetID } = useUserData();
   const { setBatchEvents } = useEventData();
   const { groupsJoined, updateGroup } = useGroupsJoined();
   const { chatMessagesMap, setBatchChatMessages } = useChatMessages();
-  const handleSignIn = async () => {
-    if (sunetID.trim() && password.trim()) {
-      const signInResult = await signIn(sunetID, password);
-      if (signInResult) {
-        const returnUser = await fetchUserData(sunetID);
-        if (returnUser) {
-          console.log(returnUser);
-          updateUserData(returnUser);
-          updateSunetID(sunetID);
-          const allEvents = await fetchAllEvents();
-          const joinedEventIds = returnUser.joinedEvents;
-          const joinedEvents = allEvents.filter((event) => joinedEventIds.includes(event.id));
-          const allChats = await fetchAllChats();
-          updateGroup(joinedEvents);
-          setBatchEvents(allEvents);
-          setBatchChatMessages(allChats);
-          navigation.navigate('Main');
+
+  const handleSignInWithGoogle = async () => {
+    const signInResult = await signIn();
+    if (signInResult) {
+      const user = auth.currentUser;
+      if (user) {
+        const email = user.email;
+        if (email && email.endsWith('@stanford.edu')) {
+          const sunetID = email.split('@')[0];
+
+          const returnUser = await fetchUserData(user.uid);
+          if (returnUser) {
+            console.log(returnUser);
+            updateUserData(returnUser);
+            updateSunetID(sunetID);
+            const allEvents = await fetchAllEvents();
+            const joinedEventIds = returnUser.joinedEvents;
+            const joinedEvents = allEvents.filter((event) => joinedEventIds.includes(event.id));
+            const allChats = await fetchAllChats();
+            updateGroup(joinedEvents);
+            setBatchEvents(allEvents);
+            setBatchChatMessages(allChats);
+            navigation.navigate('Main');
+          } else {
+            console.log('Failed to fetch user data');
+            Alert.alert('Error', 'Failed to fetch user data.');
+          }
         } else {
-          console.log('failed to fetch user data');
-          Alert.alert('Error', 'Failed to fetch user data.');
+          console.log('Non-Stanford email used');
+          Alert.alert('Error', 'Please use a Stanford email to log in.');
+          await auth.signOut();
         }
-      } else {
-        Alert.alert('Error', 'Invalid SUNet ID or password.');
       }
     } else {
-      Alert.alert('Error', 'Please enter your SUNet ID and password.');
+      Alert.alert('Error', 'Google sign-in failed.');
     }
   };
+
+  useEffect(() => {
+    const email = localStorage.getItem('email');
+    if (email) {
+      setValue(email);
+    }
+  }, []);
+
   return (
     <View style={[styles.flex1, styles.centeredContainer]}>
-      <Text style={styles.loginTitle}>DAWG</Text>
-      <TextInput
-        style={styles.loginInput}
-        placeholder="SUNet ID..."
-        value={sunetID}
-        onChangeText={setSunetID}
-      />
-      <TextInput
-        style={styles.loginInput}
-        placeholder="Password..."
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TouchableOpacity style={styles.loginButton} onPress={handleSignIn}>
-        <Text style={styles.loginButtonText}>Sign In</Text>
+
+      <TouchableOpacity style={styles.loginButton} onPress={handleSignInWithGoogle}>
+        <Text style={styles.loginButtonText}>Login</Text>
       </TouchableOpacity>
+      <Text style={styles.disclaimerText}>
+        Login to create a new account or login to existing account.
+      </Text>
+      <Text style={styles.disclaimerText}>
+        You must use a Stanford email (@stanford.edu) to login.
+      </Text>
     </View>
   );
 };
@@ -1196,6 +1215,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#ccc',
+  },
+  disclaimerText: {
+    marginTop: 20,
+    color: 'grey',
+    textAlign: 'center',
+    fontSize: 14,
   },
   itemContainer: {
     flexDirection: 'row',
