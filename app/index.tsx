@@ -314,6 +314,22 @@ const FeedComponent = ({ navigation }) => {
   const { userData, updateUserData, sunetID } = useUserData();
   const data = useMemo(() => (activeTab === 'DAWGIN' ? events : events), [activeTab, events]);
 
+  const shuffleArray = (array) => {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  };
+
+  const sortedData = useMemo(() => {
+    if (activeTab === 'DAWGIN') {
+      return shuffleArray([...events]);
+    } else {
+      return [...events].sort((a, b) => parseInt(b.time) - parseInt(a.time));
+    }
+  }, [activeTab, events]);
+
   const handleJoinToggle = (item) => {
     if (!userData) return;
     const isJoined = isEventJoined(userData, item.id);
@@ -382,7 +398,7 @@ const FeedComponent = ({ navigation }) => {
 
   return (
     <FlatList
-      data={data}
+      data={sortedData}
       renderItem={renderItem}
       keyExtractor={(item) => item.id}
       contentContainerStyle={{ flexGrow: 1 }} // Ensure the FlatList container takes up full height
