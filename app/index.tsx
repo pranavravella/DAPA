@@ -650,7 +650,18 @@ const PostScreen = ({ route }) => {
 
 // Groups Joined Component
 const GroupsJoined = ({ navigation }) => {
-  const { groupsJoined } = useGroupsJoined();
+  const { groupsJoined, removeGroup } = useGroupsJoined();
+  const { userData, updateUserData, sunetID } = useUserData();
+
+  const handleLeaveGroup = async (item) => {
+    removeGroup(item);
+    const updatedUserData = {
+      ...userData,
+      joinedEvents: userData.joinedEvents.filter(eventId => eventId !== item.id),
+    };
+    updateUserData(updatedUserData);
+    await databaseUserUpdate(updatedUserData, sunetID);
+  };
 
   const renderItem = ({ item }) => {
     const formattedTime = new Date(parseInt(item.time)).toLocaleString();
@@ -667,6 +678,12 @@ const GroupsJoined = ({ navigation }) => {
               <Text>{item.joined} Players Joined </Text>
               <Text>{item.comments} Comments</Text>
             </View>
+            <TouchableOpacity
+              style={styles.smallLeaveButton} 
+              onPress={() => handleLeaveGroup(item)}
+            >
+            <Text style={styles.smallLeaveButtonText}>Leave Group</Text>
+          </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -707,14 +724,15 @@ const updateChatMessagesInDatabase = async (newMessage: chatMessage, eventId: st
   }
 };
 
-const ChatRoom = ({ route }) => {
+const ChatRoom = ({ route, navigation}) => {
   const { item } = route.params;
   const { chatMessagesMap, addChatMessage } = useContext(chatMessagesMapContext);
-  const { sunetID } = useUserData();
+  const { sunetID, userData, updateUserData } = useUserData();
   const messages = chatMessagesMap[item.id] || [];
   const [newMessage, setNewMessage] = useState('');
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  const { removeGroup } = useGroupsJoined();
 
   const handleSend = () => {
     if (newMessage.trim()) {
@@ -739,6 +757,17 @@ const ChatRoom = ({ route }) => {
     setIsReportModalVisible(true);
   };
 
+  const handleLeaveGroup = async () => {
+    removeGroup(item);
+    const updatedUserData = {
+      ...userData,
+      joinedEvents: userData.joinedEvents.filter(eventId => eventId !== item.id)
+    };
+    updateUserData(updatedUserData);
+    await databaseUserUpdate(updatedUserData, sunetID);
+    navigation.navigate('Groups Joined');
+  };
+
   const renderMessage = ({ item }) => {
     const formattedTime = new Date(parseInt(item.time)).toLocaleString();
     return (
@@ -760,6 +789,9 @@ const ChatRoom = ({ route }) => {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.chatHeader}>
+        <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveGroup}>
+          <Text style={styles.leaveButtonText}>Leave Group</Text>
+        </TouchableOpacity>
         <TouchableOpacity
             style={styles.reportChatButton}
             onPress={() => openReportModal(item)}
@@ -1810,6 +1842,31 @@ const styles = StyleSheet.create({
   reportChatButtonText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  leaveButton: {
+    backgroundColor: 'lightgray',
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginRight: 10,
+  },
+  leaveButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  smallLeaveButton: {
+    backgroundColor: 'lightgray',
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginTop: 10,
+    width: 120,
+  },
+  smallLeaveButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 
