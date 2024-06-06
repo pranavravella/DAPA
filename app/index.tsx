@@ -32,12 +32,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Picker } from '@react-native-picker/picker';
 
-
 import { initializeApp } from 'firebase/app';
 import { v4 as uuidv4 } from 'uuid';
 
 // Google
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD1bee7SxskYp7V_sZO1V6j2JJEdVgHhtI',
@@ -51,7 +50,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app)
+const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
 import {
@@ -255,7 +254,7 @@ const AuthProvider = ({ children }) => {
       return false;
     }
   };
-  
+
   const signOut = () => {
     setIsSignedIn(false);
   };
@@ -283,8 +282,7 @@ const ReportModal = ({ isReportModalVisible, setIsReportModalVisible, handleRepo
       animationType="slide"
       transparent={true}
       visible={isReportModalVisible}
-      onRequestClose={() => setIsReportModalVisible(false)}
-    >
+      onRequestClose={() => setIsReportModalVisible(false)}>
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
           <Text style={styles.modalText}>Report Post</Text>
@@ -292,8 +290,7 @@ const ReportModal = ({ isReportModalVisible, setIsReportModalVisible, handleRepo
           <Picker
             selectedValue={reportReason}
             onValueChange={(itemValue) => setReportReason(itemValue)}
-            style={styles.picker}
-          >
+            style={styles.picker}>
             <Picker.Item label="Spam" value="Spam" />
             <Picker.Item label="Inappropriate Content" value="Inappropriate Content" />
             <Picker.Item label="Harassment" value="Harassment" />
@@ -308,7 +305,9 @@ const ReportModal = ({ isReportModalVisible, setIsReportModalVisible, handleRepo
             onChangeText={setAdditionalInfo}
             multiline={true}
           />
-          <TouchableOpacity style={[styles.button, styles.buttonClose]} onPress={handleReportSubmit}>
+          <TouchableOpacity
+            style={[styles.button, styles.buttonClose]}
+            onPress={handleReportSubmit}>
             <Text style={styles.textStyle}>Submit Report</Text>
           </TouchableOpacity>
         </View>
@@ -360,10 +359,14 @@ const FeedComponent = ({ navigation }) => {
   const { events, updateEvent } = useEventData();
   const { addGroup, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
-  const data = useMemo(() => (activeTab === 'DAWGIN' ? events : events), [activeTab, events]);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [shuffledEvents, setShuffledEvents] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchChange = (text) => {
+    setSearchQuery(text);
+  };
 
   const shuffleArray = (array) => {
     const shuffledArray = [...array]; // Create a copy of the array to avoid mutating the original array
@@ -381,13 +384,18 @@ const FeedComponent = ({ navigation }) => {
     }
   }, [events]);
 
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery) return events;
+    return events.filter((event) => event.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [searchQuery, events]);
+
   const sortedData = useMemo(() => {
     if (activeTab === 'NEW') {
-      return [...events].sort((a, b) => parseInt(b.time) - parseInt(a.time));
+      return [...filteredEvents].sort((a, b) => parseInt(b.time) - parseInt(a.time));
     } else {
-      return [...events]; 
+      return shuffleArray([...filteredEvents]);
     }
-  }, [activeTab, events]);
+  }, [activeTab, filteredEvents]);
 
   const handleJoinToggle = (item) => {
     const isJoined = isEventJoined(userData, item.id);
@@ -440,12 +448,9 @@ const FeedComponent = ({ navigation }) => {
           <Text style={styles.username}>
             {item.username} - {formattedTime}
           </Text>
-          <TouchableOpacity
-            style={styles.feedReportButton}
-            onPress={() => openReportModal(item)}
-          > 
+          <TouchableOpacity style={styles.feedReportButton} onPress={() => openReportModal(item)}>
             <Text style={styles.feedReportButtonText}>Report Post</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Post', { item })}>
           <View style={styles.content}>
@@ -459,9 +464,13 @@ const FeedComponent = ({ navigation }) => {
                 <Text>{item.comments} Comments</Text>
               </View>
               <View style={styles.stats}>
-                <Text>{item.joined} / {item.maxParticipants} Players Joined</Text> {/* Show number of participants */}
+                <Text>
+                  {item.joined} / {item.maxParticipants} Players Joined
+                </Text>{' '}
+                {/* Show number of participants */}
               </View>
-              {isFull && <Text style={styles.fullText}>This event is full</Text>} {/* Show full status */}
+              {isFull && <Text style={styles.fullText}>This event is full</Text>}{' '}
+              {/* Show full status */}
             </View>
           </View>
         </TouchableOpacity>
@@ -470,15 +479,15 @@ const FeedComponent = ({ navigation }) => {
             style={
               userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
             }
-            onPress={() => handleJoinToggle(item)}
-          >
+            onPress={() => handleJoinToggle(item)}>
             <Text
               style={
                 userData && isEventJoined(userData, item.id)
                   ? styles.joinedButtonText
                   : styles.joinedButtonText
               }>
-              {userData && isEventJoined(userData, item.id) ? 'Joined' : (isFull ? 'Full' : 'Join')} {/* Show "Full" if event is full */}
+              {userData && isEventJoined(userData, item.id) ? 'Joined' : isFull ? 'Full' : 'Join'}{' '}
+              {/* Show "Full" if event is full */}
             </Text>
           </TouchableOpacity>
         </View>
@@ -488,6 +497,12 @@ const FeedComponent = ({ navigation }) => {
 
   return (
     <>
+      <TextInput
+        style={styles.searchBar}
+        placeholder="Search"
+        value={searchQuery}
+        onChangeText={handleSearchChange}
+      />
       <FlatList
         data={sortedData}
         renderItem={renderItem}
@@ -593,10 +608,7 @@ const PostScreen = ({ route }) => {
           <Text style={{ fontWeight: 'bold' }}>{item.username}</Text> {formattedTime}
         </Text>
         <Text style={styles.commentText}>{item.text}</Text>
-        <TouchableOpacity
-          style={styles.reportButton}
-          onPress={() => openReportModal(item)}
-        >
+        <TouchableOpacity style={styles.reportButton} onPress={() => openReportModal(item)}>
           <Text style={styles.reportButtonText}>Report Comment</Text>
         </TouchableOpacity>
       </View>
@@ -636,10 +648,7 @@ const PostScreen = ({ route }) => {
           {userData && isEventJoined(userData, currentEvent.id) ? 'Joined' : 'Join'}
         </Text>
       </TouchableOpacity>
-      <TouchableOpacity
-          style={styles.reportButton}
-          onPress={() => openReportModal(item)}
-      > 
+      <TouchableOpacity style={styles.reportButton} onPress={() => openReportModal(item)}>
         <Text style={styles.reportButtonText}>Report Post</Text>
       </TouchableOpacity>
       <Text style={styles.commentsHeader}>Comments:</Text>
@@ -685,7 +694,7 @@ const GroupsJoined = ({ navigation }) => {
 
     const updatedUserData = {
       ...userData,
-      joinedEvents: userData.joinedEvents.filter(eventId => eventId !== item.id),
+      joinedEvents: userData.joinedEvents.filter((eventId) => eventId !== item.id),
     };
     updateUserData(updatedUserData);
     await databaseUserUpdate(updatedUserData, sunetID);
@@ -707,11 +716,10 @@ const GroupsJoined = ({ navigation }) => {
               <Text>{item.comments} Comments</Text>
             </View>
             <TouchableOpacity
-              style={styles.smallLeaveButton} 
-              onPress={() => handleLeaveGroup(item)}
-            >
-            <Text style={styles.smallLeaveButtonText}>Leave Group</Text>
-          </TouchableOpacity>
+              style={styles.smallLeaveButton}
+              onPress={() => handleLeaveGroup(item)}>
+              <Text style={styles.smallLeaveButtonText}>Leave Group</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -726,7 +734,6 @@ const GroupsJoined = ({ navigation }) => {
       contentContainerStyle={{ flexGrow: 1 }}
       style={{ flex: 1 }}
     />
-    
   );
 };
 
@@ -752,7 +759,7 @@ const updateChatMessagesInDatabase = async (newMessage: chatMessage, eventId: st
   }
 };
 
-const ChatRoom = ({ route, navigation}) => {
+const ChatRoom = ({ route, navigation }) => {
   const { item } = route.params;
   const { chatMessagesMap, addChatMessage } = useContext(chatMessagesMapContext);
   const { sunetID, userData, updateUserData } = useUserData();
@@ -796,7 +803,7 @@ const ChatRoom = ({ route, navigation}) => {
 
     const updatedUserData = {
       ...userData,
-      joinedEvents: userData.joinedEvents.filter(eventId => eventId !== item.id)
+      joinedEvents: userData.joinedEvents.filter((eventId) => eventId !== item.id),
     };
     updateUserData(updatedUserData);
     await databaseUserUpdate(updatedUserData, sunetID);
@@ -827,10 +834,7 @@ const ChatRoom = ({ route, navigation}) => {
         <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveGroup}>
           <Text style={styles.leaveButtonText}>Leave Group</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-            style={styles.reportChatButton}
-            onPress={() => openReportModal(item)}
-        > 
+        <TouchableOpacity style={styles.reportChatButton} onPress={() => openReportModal(item)}>
           <Text style={styles.reportChatButtonText}>Report Chatroom</Text>
         </TouchableOpacity>
       </View>
@@ -987,7 +991,7 @@ const fetchUserData = async (userId: string): Promise<UserData | null> => {
         intermediateInterests: [],
         pronouns: '',
         joinedEvents: [],
-        hasAcceptedRules: false
+        hasAcceptedRules: false,
       };
       await setDoc(userRef, newUser);
       console.log('New user created:', newUser);
@@ -1064,7 +1068,7 @@ const LoginScreen = ({ navigation }) => {
         if (email && email.endsWith('@stanford.edu')) {
           const sunetID = email.split('@')[0];
 
-          const returnUser = await fetchUserData(user.uid);
+          const returnUser = await fetchUserData(sunetID);
           if (returnUser) {
             console.log(returnUser);
             updateUserData(returnUser);
@@ -1101,7 +1105,6 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <View style={[styles.flex1, styles.centeredContainer]}>
-
       <TouchableOpacity style={styles.loginButton} onPress={handleSignInWithGoogle}>
         <Text style={styles.loginButtonText}>Login</Text>
       </TouchableOpacity>
@@ -1133,7 +1136,6 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [userData]);
 
-
   const handleSearchChange = (text) => {
     setSearchQuery(text);
   };
@@ -1153,12 +1155,6 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <View style={[styles.flex1, { paddingTop: insets.top, backgroundColor: '#fff' }]}>
-      <TextInput
-        style={styles.searchBar}
-        placeholder="Search"
-        value={searchQuery}
-        onChangeText={handleSearchChange}
-      />
       <View style={styles.flex1}>
         <MyTabs navigation={navigation} />
       </View>
@@ -1171,8 +1167,7 @@ const HomeScreen = ({ navigation }) => {
         visible={isModalVisible}
         onRequestClose={() => {
           setIsModalVisible(!isModalVisible);
-        }}
-      >
+        }}>
         <View style={styles.centeredView}>
           <View style={styles.modalView}>
             <Text style={styles.modalText}>Rules and Guidelines</Text>
@@ -1181,12 +1176,11 @@ const HomeScreen = ({ navigation }) => {
               2. No spamming, discrimination, or harassment.{'\n'}
               3. Follow the event guidelines and instructions.{'\n'}
               4. Engage positively and constructively.{'\n'}
-              5. Report any inappropriate behavior to moderators. 
+              5. Report any inappropriate behavior to moderators.
             </Text>
             <TouchableOpacity
               style={[styles.button, styles.buttonClose]}
-              onPress={handleAcceptRules}
-            >
+              onPress={handleAcceptRules}>
               <Text style={styles.textStyle}>Accept</Text>
             </TouchableOpacity>
           </View>
@@ -1235,7 +1229,7 @@ const ProfileScreen = ({ navigation }) => {
       intermediateInterests: intermediateInterests,
       advancedInterests: advancedInterests,
       joinedEvents: userData?.joinedEvents || [],
-      hasAcceptedRules: true
+      hasAcceptedRules: true,
     };
     updateUserData(newUserData);
     databaseUserUpdate(newUserData, sunetID);
@@ -1331,10 +1325,7 @@ const ProfileScreen = ({ navigation }) => {
         onPress={() => (isEditing ? handleSave() : setIsEditing(true))}>
         <Text style={styles.editProfileButtonText}>{isEditing ? 'Save' : 'Edit'}</Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.rulesButton}
-        onPress={() => setIsModalVisible(true)}
-      >
+      <TouchableOpacity style={styles.rulesButton} onPress={() => setIsModalVisible(true)}>
         <Text style={styles.rulesButtonText}>Rules</Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -1351,8 +1342,7 @@ const ProfileScreen = ({ navigation }) => {
         visible={isModalVisible}
         onRequestClose={() => {
           setIsModalVisible(!isModalVisible);
-        }}
-      >
+        }}>
         <View style={styles.centeredView}>
           <View style={styles.modalView}>
             <Text style={styles.modalText}>Rules and Guidelines</Text>
@@ -1365,8 +1355,7 @@ const ProfileScreen = ({ navigation }) => {
             </Text>
             <TouchableOpacity
               style={[styles.button, styles.buttonClose]}
-              onPress={() => setIsModalVisible(false)}
-            >
+              onPress={() => setIsModalVisible(false)}>
               <Text style={styles.textStyle}>Close</Text>
             </TouchableOpacity>
           </View>
@@ -1481,7 +1470,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    marginVertical: 10, 
+    marginVertical: 10,
   },
   username: {
     fontWeight: 'bold',
@@ -1921,5 +1910,3 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
-
-
