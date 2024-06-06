@@ -359,32 +359,34 @@ const FeedComponent = ({ navigation }) => {
   const { events, updateEvent } = useEventData();
   const { addGroup, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
-  const [shuffledEvents, setShuffledEvents] = useState([]);
   const data = useMemo(() => (activeTab === 'DAWGIN' ? events : events), [activeTab, events]);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
-
-  useEffect(() => {
-    if (activeTab === 'DAWGIN' && shuffledEvents.length === 0) {
-      setShuffledEvents(shuffleArray([...events]));
-    }
-  }, [activeTab, events]);
+  const [shuffledEvents, setShuffledEvents] = useState([]);
 
   const shuffleArray = (array) => {
-    for (let i = array.length - 1; i > 0; i--) {
+    const shuffledArray = [...array]; // Create a copy of the array to avoid mutating the original array
+    for (let i = shuffledArray.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
+      [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]];
     }
-    return array;
+    return shuffledArray;
   };
+
+  // Shuffle the events array only once when the component mounts or when the events array changes
+  useEffect(() => {
+    if (events.length > 0) {
+      setShuffledEvents(shuffleArray([...events])); // Shuffle the events array once
+    }
+  }, [events]);
 
   const sortedData = useMemo(() => {
     if (activeTab === 'NEW') {
       return [...events].sort((a, b) => parseInt(b.time) - parseInt(a.time));
     } else {
-      return shuffledEvents.length > 0 ? shuffledEvents : events;
+      return [...events]; 
     }
-  }, [activeTab, events, shuffledEvents]);
+  }, [activeTab, events]);
 
   const handleJoinToggle = (item) => {
     if (!userData) return;
@@ -395,6 +397,11 @@ const FeedComponent = ({ navigation }) => {
     };
     updateEvent(updatedEvent);
     updateEventInDatabase(updatedEvent);
+
+    setShuffledEvents((prevShuffledEvents) =>
+      prevShuffledEvents.map((event) => (event.id === updatedEvent.id ? updatedEvent : event))
+    );
+
     const updatedUserData = {
       ...userData,
       joinedEvents: isJoined
@@ -661,7 +668,6 @@ const GroupsJoined = ({ navigation }) => {
   const { groupsJoined, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
   const { updateEvent } = useEventData();
-
 
   const handleLeaveGroup = async (item) => {
     removeGroup(item);
