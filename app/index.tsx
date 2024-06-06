@@ -457,7 +457,8 @@ const FeedComponent = ({ navigation }) => {
             style={
               userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
             }
-            onPress={() => handleJoinToggle(item)}>
+            onPress={() => handleJoinToggle(item)}
+          >
             <Text
               style={
                 userData && isEventJoined(userData, item.id)
@@ -659,9 +660,17 @@ const PostScreen = ({ route }) => {
 const GroupsJoined = ({ navigation }) => {
   const { groupsJoined, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
+  const { updateEvent } = useEventData();
+
 
   const handleLeaveGroup = async (item) => {
     removeGroup(item);
+    const updatedEvent = {
+      ...item,
+      joined: item.joined - 1,
+    };
+    updateEvent(updatedEvent);
+
     const updatedUserData = {
       ...userData,
       joinedEvents: userData.joinedEvents.filter(eventId => eventId !== item.id),
@@ -740,6 +749,7 @@ const ChatRoom = ({ route, navigation}) => {
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const { removeGroup } = useGroupsJoined();
+  const { updateEvent } = useEventData();
 
   const handleSend = () => {
     if (newMessage.trim()) {
@@ -766,6 +776,12 @@ const ChatRoom = ({ route, navigation}) => {
 
   const handleLeaveGroup = async () => {
     removeGroup(item);
+    const updatedEvent = {
+      ...item,
+      joined: item.joined - 1,
+    };
+    updateEvent(updatedEvent);
+
     const updatedUserData = {
       ...userData,
       joinedEvents: userData.joinedEvents.filter(eventId => eventId !== item.id)
