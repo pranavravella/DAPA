@@ -359,9 +359,16 @@ const FeedComponent = ({ navigation }) => {
   const { events, updateEvent } = useEventData();
   const { addGroup, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
+  const [shuffledEvents, setShuffledEvents] = useState([]);
   const data = useMemo(() => (activeTab === 'DAWGIN' ? events : events), [activeTab, events]);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+
+  useEffect(() => {
+    if (activeTab === 'DAWGIN' && shuffledEvents.length === 0) {
+      setShuffledEvents(shuffleArray([...events]));
+    }
+  }, [activeTab, events]);
 
   const shuffleArray = (array) => {
     for (let i = array.length - 1; i > 0; i--) {
@@ -372,12 +379,12 @@ const FeedComponent = ({ navigation }) => {
   };
 
   const sortedData = useMemo(() => {
-    if (activeTab === 'DAWGIN') {
-      return shuffleArray([...events]);
-    } else {
+    if (activeTab === 'NEW') {
       return [...events].sort((a, b) => parseInt(b.time) - parseInt(a.time));
+    } else {
+      return shuffledEvents.length > 0 ? shuffledEvents : events;
     }
-  }, [activeTab, events]);
+  }, [activeTab, events, shuffledEvents]);
 
   const handleJoinToggle = (item) => {
     if (!userData) return;
