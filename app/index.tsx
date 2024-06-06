@@ -61,6 +61,7 @@ import {
   Timestamp,
   collection,
   getDocs,
+  deleteDoc,
 } from 'firebase/firestore';
 import { NativeSegmentedControlIOSChangeEvent } from '@react-native-segmented-control/segmented-control';
 const db = getFirestore(app);
@@ -355,20 +356,20 @@ const updateEventInDatabase = async (newEvent: Event) => {
 // Feed Component
 const FeedComponent = ({ navigation }) => {
   const { activeTab } = useActiveTab();
-  const { events, updateEvent } = useEventData();
+  const { events, updateEvent, setBatchEvents } = useEventData();
   const { addGroup, removeGroup } = useGroupsJoined();
   const { userData, updateUserData, sunetID } = useUserData();
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [shuffledEvents, setShuffledEvents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    // Shuffle only on component mount or when activeTab requires it
     if (activeTab === 'DAWGIN') {
       setShuffledEvents(shuffleArray(events));
     }
-  }, [activeTab]); // Dependency only on activeTab
+  }, [activeTab, events]);
 
   const handleSearchChange = (text) => {
     setSearchQuery(text);
@@ -384,17 +385,15 @@ const FeedComponent = ({ navigation }) => {
   };
 
   const filteredEvents = useMemo(() => {
-    if (!searchQuery) return shuffledEvents;
-    return shuffledEvents.filter((event) =>
-      event.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery, shuffledEvents]);
+    const lowerCaseQuery = searchQuery.toLowerCase();
+    return events.filter((event) => event.title.toLowerCase().includes(lowerCaseQuery));
+  }, [searchQuery, events]);
 
   const sortedData = useMemo(() => {
     if (activeTab === 'NEW') {
-      return [...filteredEvents].sort((a, b) => parseInt(b.time) - parseInt(a.time));
+      return filteredEvents.sort((a, b) => parseInt(b.time) - parseInt(a.time));
     } else {
-      return filteredEvents; // Use already shuffled events
+      return filteredEvents;
     }
   }, [activeTab, filteredEvents]);
 
@@ -427,17 +426,6 @@ const FeedComponent = ({ navigation }) => {
       addGroup(updatedEvent);
     }
   };
-
-  const handleReportSubmit = () => {
-    console.log('Report submitted for:', selectedPost);
-    setIsReportModalVisible(false);
-  };
-
-  const openReportModal = (post) => {
-    setSelectedPost(post);
-    setIsReportModalVisible(true);
-  };
-
   const renderItem = ({ item }) => {
     const formattedTime = new Date(parseInt(item.time)).toLocaleString();
     return (
@@ -452,18 +440,11 @@ const FeedComponent = ({ navigation }) => {
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Post', { item })}>
           <View style={styles.content}>
-            <View>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.details}>Skill Level: {item.skillLevel}</Text>
-              <Text style={styles.details}>{item.details}</Text>
-              <Text style={styles.details}>Location: {item.location}</Text>
-              <Text style={styles.details}>Additional Info: {item.additionalInfo}</Text>
-              <View style={styles.stats}>
-                <Text>{item.joined} Players Joined</Text>
-                <Text>{item.comments} Comments</Text>
-              </View>
-              <View style={styles.stats}></View>
-            </View>
+            <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.details}>Skill Level: {item.skillLevel}</Text>
+            <Text style={styles.details}>{item.details}</Text>
+            <Text style={styles.details}>Location: {item.location}</Text>
+            <Text style={styles.details}>Additional Info: {item.additionalInfo}</Text>
           </View>
         </TouchableOpacity>
         <View style={styles.footer}>
@@ -472,18 +453,49 @@ const FeedComponent = ({ navigation }) => {
               userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
             }
             onPress={() => handleJoinToggle(item)}>
-            <Text
-              style={
-                userData && isEventJoined(userData, item.id)
-                  ? styles.joinedButtonText
-                  : styles.joinedButtonText
-              }>
+            <Text style={styles.joinedButtonText}>
               {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
             </Text>
           </TouchableOpacity>
+          {item.username === sunetID && (
+            <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteEvent(item)}>
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
+  };
+
+  const handleDeleteEvent = async (event) => {
+    try {
+      const updatedEvents = events.filter((e) => e.id !== event.id);
+      setBatchEvents(updatedEvents);
+      const updatedUserData = {
+        ...userData,
+        joinedEvents: userData.joinedEvents.filter((eventId) => eventId !== event.id),
+      };
+      updateUserData(updatedUserData);
+      await databaseUserUpdate(updatedUserData, sunetID);
+      removeGroup(event);
+      const db = getFirestore(app);
+      const eventRef = doc(db, 'Events', event.id);
+      await deleteDoc(eventRef);
+      console.log('Event deleted successfully');
+      setRefreshKey((prevKey) => prevKey + 1);
+    } catch (error) {
+      console.error('Error deleting event: ', error);
+    }
+  };
+
+  const handleReportSubmit = () => {
+    console.log('Report submitted for:', selectedPost);
+    setIsReportModalVisible(false);
+  };
+
+  const openReportModal = (post) => {
+    setSelectedPost(post);
+    setIsReportModalVisible(true);
   };
 
   return (
@@ -498,6 +510,7 @@ const FeedComponent = ({ navigation }) => {
         data={sortedData}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        key={refreshKey} // Use the refresh key to force re-render
         contentContainerStyle={{ flexGrow: 1 }} // Ensure the FlatList container takes up full height
         style={{ flex: 1 }} // Make sure the FlatList itself expands to fill available space
       />
@@ -1897,5 +1910,17 @@ const styles = StyleSheet.create({
     color: 'red',
     fontWeight: 'bold',
     marginTop: 4,
+  },
+  deleteButton: {
+    backgroundColor: 'red',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    alignSelf: 'flex-end',
+    marginTop: 5,
+  },
+  joinedButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
