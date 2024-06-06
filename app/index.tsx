@@ -363,12 +363,19 @@ const FeedComponent = ({ navigation }) => {
   const [shuffledEvents, setShuffledEvents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
+  useEffect(() => {
+    // Shuffle only on component mount or when activeTab requires it
+    if (activeTab === 'DAWGIN') {
+      setShuffledEvents(shuffleArray(events));
+    }
+  }, [activeTab]); // Dependency only on activeTab
+
   const handleSearchChange = (text) => {
     setSearchQuery(text);
   };
 
   const shuffleArray = (array) => {
-    const shuffledArray = [...array]; // Create a copy of the array to avoid mutating the original array
+    const shuffledArray = [...array];
     for (let i = shuffledArray.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]];
@@ -376,23 +383,18 @@ const FeedComponent = ({ navigation }) => {
     return shuffledArray;
   };
 
-  // Shuffle the events array only once when the component mounts or when the events array changes
-  useEffect(() => {
-    if (events.length > 0) {
-      setShuffledEvents(shuffleArray([...events])); // Shuffle the events array once
-    }
-  }, [events]);
-
   const filteredEvents = useMemo(() => {
-    if (!searchQuery) return events;
-    return events.filter((event) => event.title.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [searchQuery, events]);
+    if (!searchQuery) return shuffledEvents;
+    return shuffledEvents.filter((event) =>
+      event.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery, shuffledEvents]);
 
   const sortedData = useMemo(() => {
     if (activeTab === 'NEW') {
       return [...filteredEvents].sort((a, b) => parseInt(b.time) - parseInt(a.time));
     } else {
-      return shuffleArray([...filteredEvents]);
+      return filteredEvents; // Use already shuffled events
     }
   }, [activeTab, filteredEvents]);
 
@@ -460,27 +462,26 @@ const FeedComponent = ({ navigation }) => {
                 <Text>{item.joined} Players Joined</Text>
                 <Text>{item.comments} Comments</Text>
               </View>
-              <View style={styles.stats}>
-              </View>
+              <View style={styles.stats}></View>
             </View>
           </View>
         </TouchableOpacity>
         <View style={styles.footer}>
-        <TouchableOpacity
-          style={
-            userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
-          }
-          onPress={() => handleJoinToggle(item)}>
-          <Text
+          <TouchableOpacity
             style={
-              userData && isEventJoined(userData, item.id)
-                ? styles.joinedButtonText
-                : styles.joinedButtonText
-            }>
-            {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+              userData && isEventJoined(userData, item.id) ? styles.joinedButton : styles.joinButton
+            }
+            onPress={() => handleJoinToggle(item)}>
+            <Text
+              style={
+                userData && isEventJoined(userData, item.id)
+                  ? styles.joinedButtonText
+                  : styles.joinedButtonText
+              }>
+              {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -934,8 +935,7 @@ const NewPostScreen = ({ navigation }) => {
           placeholder="Enter the skill level"
         />
       </View>
-      <View style={styles.infoContainer}>
-      </View>
+      <View style={styles.infoContainer}></View>
       <View style={styles.infoContainer}>
         <Text style={styles.infoLabel}>Additional Info:</Text>
         <TextInput
