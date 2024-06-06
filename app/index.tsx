@@ -147,6 +147,7 @@ type Event = {
   title: string;
   username: string;
   commentArray: commentObject[];
+  maxParticipants: number;
 };
 
 type chatMessage = {
@@ -389,8 +390,10 @@ const FeedComponent = ({ navigation }) => {
   }, [activeTab, events]);
 
   const handleJoinToggle = (item) => {
-    if (!userData) return;
     const isJoined = isEventJoined(userData, item.id);
+    if (!isJoined && item.joined >= item.maxParticipants) return;
+
+    if (!userData) return;
     const updatedEvent = {
       ...item,
       joined: isJoined ? item.joined - 1 : item.joined + 1,
@@ -429,6 +432,8 @@ const FeedComponent = ({ navigation }) => {
 
   const renderItem = ({ item }) => {
     const formattedTime = new Date(parseInt(item.time)).toLocaleString();
+    const isJoined = userData && isEventJoined(userData, item.id);
+    const isFull = item.joined >= item.maxParticipants;
     return (
       <View style={styles.itemContainer}>
         <View style={styles.header}>
@@ -454,8 +459,9 @@ const FeedComponent = ({ navigation }) => {
                 <Text>{item.comments} Comments</Text>
               </View>
               <View style={styles.stats}>
-                <Text>{item.joined} Players Joined </Text>
+                <Text>{item.joined} / {item.maxParticipants} Players Joined</Text> {/* Show number of participants */}
               </View>
+              {isFull && <Text style={styles.fullText}>This event is full</Text>} {/* Show full status */}
             </View>
           </View>
         </TouchableOpacity>
@@ -472,7 +478,7 @@ const FeedComponent = ({ navigation }) => {
                   ? styles.joinedButtonText
                   : styles.joinedButtonText
               }>
-              {userData && isEventJoined(userData, item.id) ? 'Joined' : 'Join'}
+              {userData && isEventJoined(userData, item.id) ? 'Joined' : (isFull ? 'Full' : 'Join')} {/* Show "Full" if event is full */}
             </Text>
           </TouchableOpacity>
         </View>
@@ -862,6 +868,7 @@ const NewPostScreen = ({ navigation }) => {
   const [location, setLocation] = useState('');
   const [skillLevel, setSkillLevel] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
+  const [maxParticipants, setMaxParticipants] = useState('');
   const { sunetID } = useUserData();
 
   const { addEvent } = useEventData();
@@ -880,6 +887,7 @@ const NewPostScreen = ({ navigation }) => {
       location,
       additionalInfo,
       commentArray: [],
+      maxParticipants: parseInt(maxParticipants, 10),
     };
     addEvent(newEvent);
     updateEventInDatabase(newEvent);
@@ -932,6 +940,16 @@ const NewPostScreen = ({ navigation }) => {
           value={skillLevel}
           onChangeText={setSkillLevel}
           placeholder="Enter the skill level"
+        />
+      </View>
+      <View style={styles.infoContainer}>
+        <Text style={styles.infoLabel}>Max Participants:</Text> {/* Add this input */}
+        <TextInput
+          style={styles.infoText}
+          value={maxParticipants}
+          onChangeText={setMaxParticipants}
+          placeholder="Enter the max number of participants"
+          keyboardType="numeric"
         />
       </View>
       <View style={styles.infoContainer}>
@@ -1896,6 +1914,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 12,
     textAlign: 'center',
+  },
+  fullText: {
+    color: 'red',
+    fontWeight: 'bold',
+    marginTop: 4,
   },
 });
 
