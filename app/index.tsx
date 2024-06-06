@@ -864,7 +864,8 @@ const NewPostScreen = ({ navigation }) => {
   const [skillLevel, setSkillLevel] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
   const { sunetID } = useUserData();
-
+  const { userData, updateUserData } = useUserData();
+  const { addGroup } = useGroupsJoined();
   const { addEvent } = useEventData();
 
   const handleSubmit = () => {
@@ -875,7 +876,7 @@ const NewPostScreen = ({ navigation }) => {
       time: Date.now().toString(),
       title,
       details: `${sport} at ${time}`,
-      joined: 0,
+      joined: 1, // Start with 1 because the creator automatically joins
       comments: 0,
       skillLevel,
       location,
@@ -884,6 +885,14 @@ const NewPostScreen = ({ navigation }) => {
     };
     addEvent(newEvent);
     updateEventInDatabase(newEvent);
+    // Automatically join the event
+    const updatedUserData = {
+      ...userData,
+      joinedEvents: userData ? [...userData.joinedEvents, newEvent.id] : [newEvent.id],
+    };
+    updateUserData(updatedUserData);
+    databaseUserUpdate(updatedUserData, sunetID);
+    addGroup(newEvent); // Add the new event to the groups joined
     navigation.navigate('Main');
   };
 
