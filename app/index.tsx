@@ -1161,7 +1161,7 @@ const HomeScreen = ({ navigation }) => {
         <MyTabs navigation={navigation} />
       </View>
       <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('NewPost')}>
-        <Icon name="plus" size={30} color="#FFF" />
+        <Text style={styles.fabText}>New Post</Text>
       </TouchableOpacity>
       <Modal
         animationType="slide"
@@ -1385,7 +1385,7 @@ const MainTabs = () => {
             iconName = 'account';
           }
 
-          return <Icon name={iconName} size={size} color={color} />;
+          return <Icon name={iconName} size={size} color={color} type="MaterialIcons" />;
         },
         tabBarActiveTintColor: 'orange', // Active tab color
         tabBarInactiveTintColor: 'gray', // Inactive tab color
@@ -1511,8 +1511,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   fabText: {
-    color: '#FFA500',
-    fontSize: 12,
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   tabContainer: {
     flexDirection: 'row',
